@@ -310,7 +310,7 @@ begin
   end if;
   if greatest(coalesce(v_match.team1_score,0),coalesce(v_match.team2_score,0)) < v_match.score_target
      or abs(coalesce(v_match.team1_score,0)-coalesce(v_match.team2_score,0)) <
-        case when v_match.win_by_two then 2 else 1 end then
+        (case when v_match.win_by_two then 2 else 1 end) then
     raise exception 'Score does not satisfy the finishing rule';
   end if;
   v_winner := case when v_match.team1_score > v_match.team2_score
