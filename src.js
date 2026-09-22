@@ -6,6 +6,11 @@ const pantryLogoMarkup=(className)=>`<img class="pantry-logo ${className}" src="
 const supabase=createClient('https://duuklzzxpegptsarcbqq.supabase.co','sb_publishable_FmGKX67AD3M4QvCuL3dSyg_w0X5vIX9')
 const app=document.querySelector('#app'); let session=null, profile=null, currentTournament=null, pendingImport=null, liveTimer=null, liveView=null, liveBusy=false, renderEpoch=0, discoveryTimer=null;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+function registrationLink(value){
+ const input=String(value||'').trim();
+ if(!input||/\s/.test(input))return null;
+ try{const url=new URL(input);return url.protocol==='https:'&&url.hostname&&!url.username&&!url.password?url.href:null}catch{return null}
+}
 function stopLive(){if(liveTimer)clearInterval(liveTimer);if(discoveryTimer)clearInterval(discoveryTimer);discoveryTimer=null;liveTimer=null;liveView=null;liveBusy=false}
 function startLive(view,refresh){stopLive();liveView=view;liveTimer=setInterval(async()=>{if(liveBusy||liveView!==view||document.querySelector('#modal')?.hasChildNodes()||document.activeElement?.matches('input[type=number]'))return;if(view.startsWith('ref:')&&[...document.querySelectorAll('[data-ref-s1],[data-ref-s2]')].some(x=>x.value!==x.dataset.original))return;if(view.startsWith('admin:matches:')&&[...document.querySelectorAll('[data-s1],[data-s2]')].some(x=>x.value!==x.dataset.original))return;liveBusy=true;try{await refresh()}catch(error){console.error('Live refresh:',error)}finally{liveBusy=false}},15000)}
 function clearRefereeSession(tid){localStorage.removeItem(`pantry_ref_${tid}`);if(localStorage.getItem('pantry_ref_active')===tid)localStorage.removeItem('pantry_ref_active')}
@@ -83,13 +88,13 @@ async function publicTournamentInfo(tid){
  stopLive();const epoch=++renderEpoch;
  const [{data:t,error},{data:info}]=await Promise.all([
   supabase.from('tournaments').select('id,name,event_type,format,start_date').eq('id',tid).single(),
-  supabase.from('tournament_info').select('content,prize_information,rules,poster_path').eq('tournament_id',tid).maybeSingle()
+  supabase.from('tournament_info').select('content,prize_information,rules,poster_path,registration_url').eq('tournament_id',tid).maybeSingle()
  ]);
  if(epoch!==renderEpoch)return;
  if(error||!t)return publicDashboard();
- const image=posterUrl(t.id,info?.poster_path);
+ const image=posterUrl(t.id,info?.poster_path),registrationUrl=registrationLink(info?.registration_url);
  const section=(title,value)=>value?.trim()?`<section class="event-info-section"><h2>${title}</h2><p>${esc(value)}</p></section>`:'';
- app.innerHTML=`<header class="public-header public-home-header"><div class="pantry-header-brand">${pantryLogoMarkup('pantry-logo-public')}<span>Tournament</span></div><button class="ghost" id="infoBack">← Danh sách giải</button></header><main class="wrap event-info-page"><div class="event-info-hero">${image?`<div class="event-poster"><img src="${esc(image)}" alt="Poster ${esc(t.name)}" loading="eager"></div>`:''}<div class="event-info-identity"><small>${eventType(t)} · ${eventFormat(t)}</small><h1>${esc(t.name)}</h1><p>${esc(displayEventDate(t.start_date))}</p><button id="infoToHub">XEM CHI TIẾT THI ĐẤU →</button></div></div>${section('THÔNG TIN GIẢI',info?.content)}${section('GIẢI THƯỞNG',info?.prize_information)}${section('QUY ĐỊNH',info?.rules)}</main>`;
+ app.innerHTML=`<header class="public-header public-home-header"><div class="pantry-header-brand">${pantryLogoMarkup('pantry-logo-public')}<span>Tournament</span></div><button class="ghost" id="infoBack">← Danh sách giải</button></header><main class="wrap event-info-page"><div class="event-info-hero">${image?`<div class="event-poster"><img src="${esc(image)}" alt="Poster ${esc(t.name)}" loading="eager"></div>`:''}<div class="event-info-identity"><small>${eventType(t)} · ${eventFormat(t)}</small><h1>${esc(t.name)}</h1><p>${esc(displayEventDate(t.start_date))}</p><div class="event-info-actions">${registrationUrl?`<a class="event-register" href="${esc(registrationUrl)}" target="_blank" rel="noopener noreferrer">ĐĂNG KÝ NGAY →</a>`:''}<button class="secondary" id="infoToHub">XEM CHI TIẾT THI ĐẤU →</button></div></div></div>${section('THÔNG TIN GIẢI',info?.content)}${section('GIẢI THƯỞNG',info?.prize_information)}${section('QUY ĐỊNH',info?.rules)}</main>`;
  const poster=app.querySelector('.event-poster img');if(poster)poster.onerror=()=>poster.parentElement.remove();
  document.querySelector('#infoBack').onclick=()=>publicDashboard();document.querySelector('#infoToHub').onclick=()=>publicTournament(tid);
 }
@@ -307,11 +312,11 @@ function navButton(k,label,active){return `<button data-tab="${k}" class="${k===
 const posterTypes={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'};
 async function renderTournamentInfoEditor(t,{preserveOnError=false}={}){
  const epoch=renderEpoch,area=document.querySelector('#workcontent');
- const {data:info,error}=await supabase.from('tournament_info').select('content,prize_information,rules,poster_path').eq('tournament_id',t.id).maybeSingle();
+ const {data:info,error}=await supabase.from('tournament_info').select('content,prize_information,rules,poster_path,registration_url').eq('tournament_id',t.id).maybeSingle();
  if(epoch!==renderEpoch)return false;
  if(error){if(!preserveOnError)area.innerHTML=`<div class="panel">${esc(error.message)}</div>`;return false}
  const isAdmin=String(profile?.role||'').toLowerCase()==='admin',image=posterUrl(t.id,info?.poster_path);
- area.innerHTML=`<section class="info-editor"><div class="page-kicker">TRANG SỰ KIỆN CÔNG KHAI</div><h1>Thông tin giải</h1><p class="muted">Nội dung này xuất hiện trên trang Thông tin giải.</p><div class="panel"><h2>POSTER GIẢI</h2><div id="posterPreview" class="editor-poster">${image?`<img src="${esc(image)}" alt="Poster hiện tại">`:'<p>Chưa có poster.</p>'}</div>${isAdmin?'<label>Chọn poster mới<input id="posterUpload" type="file" accept="image/jpeg,image/png,image/webp"></label><button type="button" class="secondary" id="removePoster">Gỡ poster</button>':''}</div><div class="panel"><label>NỘI DUNG GIẢI<textarea id="eventContent" rows="7" ${isAdmin?'':'readonly'} placeholder="Giới thiệu và nội dung giải">${esc(info?.content||'')}</textarea></label><label>GIẢI THƯỞNG<textarea id="eventPrizes" rows="5" ${isAdmin?'':'readonly'} placeholder="Thông tin giải thưởng">${esc(info?.prize_information||'')}</textarea></label><label>QUY ĐỊNH<textarea id="eventRules" rows="7" ${isAdmin?'':'readonly'} placeholder="Thể lệ và quy định">${esc(info?.rules||'')}</textarea></label>${isAdmin?'<button id="saveEventInfo">Lưu thông tin giải</button>':''}<p id="eventInfoMessage" role="status"></p></div></section>`;
+ area.innerHTML=`<section class="info-editor"><div class="page-kicker">TRANG SỰ KIỆN CÔNG KHAI</div><h1>Thông tin giải</h1><p class="muted">Nội dung này xuất hiện trên trang Thông tin giải.</p><div class="panel"><h2>POSTER GIẢI</h2><div id="posterPreview" class="editor-poster">${image?`<img src="${esc(image)}" alt="Poster hiện tại">`:'<p>Chưa có poster.</p>'}</div>${isAdmin?'<label>Chọn poster mới<input id="posterUpload" type="file" accept="image/jpeg,image/png,image/webp"></label><button type="button" class="secondary" id="removePoster">Gỡ poster</button>':''}</div><div class="panel"><label>NỘI DUNG GIẢI<textarea id="eventContent" rows="7" ${isAdmin?'':'readonly'} placeholder="Giới thiệu và nội dung giải">${esc(info?.content||'')}</textarea></label><label>GIẢI THƯỞNG<textarea id="eventPrizes" rows="5" ${isAdmin?'':'readonly'} placeholder="Thông tin giải thưởng">${esc(info?.prize_information||'')}</textarea></label><label>QUY ĐỊNH<textarea id="eventRules" rows="7" ${isAdmin?'':'readonly'} placeholder="Thể lệ và quy định">${esc(info?.rules||'')}</textarea></label><label>LINK ĐĂNG KÝ<input id="eventRegistration" type="text" inputmode="url" ${isAdmin?'':'readonly'} value="${esc(info?.registration_url||'')}" placeholder="Dán link nhóm Zalo hoặc link đăng ký"></label><p class="info-registration-help">Khách sẽ được chuyển đến link này khi bấm Đăng ký ngay.</p>${isAdmin?'<button id="saveEventInfo">Lưu thông tin giải</button>':''}<p id="eventInfoMessage" role="status"></p></div></section>`;
  if(!isAdmin)return true;
  const savedInfo=info||{poster_path:null};
  let pendingPoster=null,removePoster=false;
@@ -326,6 +331,9 @@ async function renderTournamentInfoEditor(t,{preserveOnError=false}={}){
  area.querySelector('#removePoster').onclick=()=>{pendingPoster=null;removePoster=true;fileInput.value='';preview.innerHTML='<p>Poster sẽ được gỡ khi lưu.</p>';message.textContent='';};
  area.querySelector('#saveEventInfo').onclick=async()=>{
   const button=area.querySelector('#saveEventInfo');button.disabled=true;message.textContent='Đang lưu…';
+  const enteredRegistration=area.querySelector('#eventRegistration').value.trim();
+  const registrationUrl=registrationLink(enteredRegistration);
+  if(enteredRegistration&&!registrationUrl){message.textContent='Link đăng ký không hợp lệ. Vui lòng nhập link https://...';button.disabled=false;return}
   const oldPath=savedInfo.poster_path;
   let nextPath=removePoster?null:oldPath,newPath=null,newPosterUploaded=false;
   // Phase A: upload a distinct object; a failed upload never owns that path.
@@ -343,7 +351,7 @@ async function renderTournamentInfoEditor(t,{preserveOnError=false}={}){
    }catch(err){message.textContent=err.message||'Không thể tải poster mới.';button.disabled=false;return}
   }
   // Phase B: only a confirmed database failure may roll back the new object.
-  const payload={tournament_id:t.id,content:area.querySelector('#eventContent').value,prize_information:area.querySelector('#eventPrizes').value,rules:area.querySelector('#eventRules').value,poster_path:nextPath,updated_at:new Date().toISOString()};
+  const payload={tournament_id:t.id,content:area.querySelector('#eventContent').value,prize_information:area.querySelector('#eventPrizes').value,rules:area.querySelector('#eventRules').value,registration_url:registrationUrl,poster_path:nextPath,updated_at:new Date().toISOString()};
   let saveError,saveOutcomeUnknown=false;
   try{({error:saveError}=await supabase.from('tournament_info').upsert(payload,{onConflict:'tournament_id'}))}
   catch(err){saveError=err;saveOutcomeUnknown=true}
