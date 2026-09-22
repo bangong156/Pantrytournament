@@ -4,9 +4,9 @@ import './style.css'
 import pantryLogo from './assets/the-pantry-logo.png'
 const pantryLogoMarkup=(className)=>`<img class="pantry-logo ${className}" src="${pantryLogo}" alt="The Pantry">`
 const supabase=createClient('https://duuklzzxpegptsarcbqq.supabase.co','sb_publishable_FmGKX67AD3M4QvCuL3dSyg_w0X5vIX9')
-const app=document.querySelector('#app'); let session=null, profile=null, currentTournament=null, pendingImport=null, liveTimer=null, liveView=null, liveBusy=false, renderEpoch=0;
+const app=document.querySelector('#app'); let session=null, profile=null, currentTournament=null, pendingImport=null, liveTimer=null, liveView=null, liveBusy=false, renderEpoch=0, discoveryTimer=null;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-function stopLive(){if(liveTimer)clearInterval(liveTimer);liveTimer=null;liveView=null;liveBusy=false}
+function stopLive(){if(liveTimer)clearInterval(liveTimer);if(discoveryTimer)clearInterval(discoveryTimer);discoveryTimer=null;liveTimer=null;liveView=null;liveBusy=false}
 function startLive(view,refresh){stopLive();liveView=view;liveTimer=setInterval(async()=>{if(liveBusy||liveView!==view||document.querySelector('#modal')?.hasChildNodes()||document.activeElement?.matches('input[type=number]'))return;if(view.startsWith('ref:')&&[...document.querySelectorAll('[data-ref-s1],[data-ref-s2]')].some(x=>x.value!==x.dataset.original))return;if(view.startsWith('admin:matches:')&&[...document.querySelectorAll('[data-s1],[data-s2]')].some(x=>x.value!==x.dataset.original))return;liveBusy=true;try{await refresh()}catch(error){console.error('Live refresh:',error)}finally{liveBusy=false}},15000)}
 function clearRefereeSession(tid){localStorage.removeItem(`pantry_ref_${tid}`);if(localStorage.getItem('pantry_ref_active')===tid)localStorage.removeItem('pantry_ref_active')}
 async function validRefereeSession(tid,token){const {data,error}=await supabase.rpc('get_referee_session',{p_session_token:token});if(error)throw error;const row=data?.[0];return row?.tournament_id===tid?row:null}
@@ -47,12 +47,51 @@ async function getOrCreatePlayer(fullName, gender=null){
 async function boot(){({data:{session}}=await supabase.auth.getSession()); if(session){const {data}=await supabase.from('profiles').select('*').eq('id',session.user.id).single();profile=data;return render()}if(await restoreRefereeSession())return;render()}
 function render(){if(!session)return publicDashboard(); dashboard()}
 
-async function publicDashboard(){
+const vietnamToday=()=>{const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(p=>[p.type,p.value]));return `${parts.year}-${parts.month}-${parts.day}`};
+const eventDate=date=>/^\d{4}-\d{2}-\d{2}$/.test(date||'')?date:String(date||'').slice(0,10);
+const displayEventDate=date=>eventDate(date)?.split('-').reverse().join('/')||'—';
+const eventCategory=(date,today)=>eventDate(date)>today?'upcoming':eventDate(date)<today?'completed':'live';
+const eventType=t=>t.event_type==='minigame'?'MINIGAME':'GIẢI ĐẤU';
+const eventFormat=t=>t.format==='mlp'?'Đồng đội / MLP':'Đánh đôi';
+function discoveryCard(t,live=false,count=0){
+ const id=esc(t.id),status=live?'● LIVE':eventCategory(t.start_date,vietnamToday())==='upcoming'?'📅 SẮP DIỄN RA':'🏆 ĐÃ KẾT THÚC';
+ return `<article class="discovery-card ${live?'discovery-live':''}" data-enter-tournament="${id}" tabindex="0" role="link" aria-label="Vào giải ${esc(t.name)}"><div class="discovery-card-top"><span class="pill">${eventType(t)} · ${eventFormat(t)}</span><span class="discovery-status ${live?'live-status':''}">${status}</span></div><h3>${esc(t.name)}</h3><p>${esc(displayEventDate(t.start_date))}${live?` · ${count} đội`:''}</p><div class="discovery-actions">${live?`<button data-hub="${id}">VÀO GIẢI →</button><button class="secondary" data-info="${id}">Thông tin giải</button>`:`<button class="secondary" data-info="${id}">Thông tin giải</button><button data-hub="${id}">Chi tiết giải →</button>`}</div></article>`;
+}
+async function publicDashboard(selectedCategory=null){
  stopLive();const epoch=++renderEpoch;
- const {data:t}=await supabase.from('tournaments').select('*').order('start_date',{ascending:false});
+ const {data:t,error}=await supabase.from('tournaments').select('id,name,event_type,format,start_date').order('start_date');
  if(epoch!==renderEpoch)return;
- app.innerHTML=`<header class="public-header public-home-header"><div class="pantry-header-brand">${pantryLogoMarkup('pantry-logo-public')}<span>Tournament</span></div><button class="ghost" id="adminLogin">Admin / Staff</button></header><main class="wrap"><div class="hero public-hero"><div><small>THE PANTRY · LIVE TOURNAMENT</small><h1>Giải đấu & Minigame</h1><p>Xem bảng đấu, lịch thi đấu, kết quả và BXH trực tiếp.</p></div></div><div class="cards">${(t||[]).map(x=>`<article class="card public-card" data-public-id="${x.id}"><div class="pill">${x.event_type==='minigame'?'MINIGAME':'GIẢI ĐẤU'}</div><h3>${esc(x.name)}</h3><p>${x.format==='mlp'?'Đồng đội / MLP':'Đánh đôi'} · ${esc(x.start_date)}</p><strong>${x.status==='group_stage'?'Đang thi đấu':esc(x.status)}</strong></article>`).join('')||'<div class="empty">Chưa có giải đấu.</div>'}</div></main><div id="modal"></div>`;
- document.querySelector('#adminLogin').onclick=login;document.querySelectorAll('[data-public-id]').forEach(c=>c.onclick=()=>publicTournament(c.dataset.publicId));
+ if(error){app.innerHTML=`<main class="wrap"><p>${esc(error.message)}</p><button id="retryDiscovery">Thử lại</button></main>`;document.querySelector('#retryDiscovery').onclick=()=>publicDashboard();return}
+ const today=vietnamToday(),all=t||[],live=all.filter(x=>eventCategory(x.start_date,today)==='live').sort((a,b)=>a.name.localeCompare(b.name,'vi')||a.id.localeCompare(b.id)),upcoming=all.filter(x=>eventCategory(x.start_date,today)==='upcoming').sort((a,b)=>eventDate(a.start_date).localeCompare(eventDate(b.start_date))||a.name.localeCompare(b.name,'vi')),completed=all.filter(x=>eventCategory(x.start_date,today)==='completed').sort((a,b)=>eventDate(b.start_date).localeCompare(eventDate(a.start_date))||a.name.localeCompare(b.name,'vi'));
+ const category=selectedCategory==='completed'||selectedCategory==='upcoming'?selectedCategory:upcoming.length?'upcoming':'completed';
+ const counts=Object.fromEntries(await Promise.all(live.map(async x=>{const {count}=await supabase.from('teams').select('id',{count:'exact',head:true}).eq('tournament_id',x.id);return [x.id,count??0]})));
+ if(epoch!==renderEpoch)return;
+ const shown=category==='upcoming'?upcoming:completed;
+ app.innerHTML=`<header class="public-header public-home-header"><div class="pantry-header-brand">${pantryLogoMarkup('pantry-logo-public')}<span>Tournament</span></div><button class="ghost" id="adminLogin">Admin / Staff</button></header><main class="wrap discovery-home"><div class="hero public-hero"><div><small>THE PANTRY · LIVE TOURNAMENT</small><h1>Giải đấu & Minigame</h1><p>Khám phá giải đấu, lịch thi đấu và kết quả của The Pantry.</p></div></div>${live.length?`<section class="discovery-live-section" aria-label="Đang diễn ra"><h2><span class="live-dot"></span> ĐANG DIỄN RA</h2><div class="discovery-grid">${live.map(x=>discoveryCard(x,true,counts[x.id]||0)).join('')}</div></section>`:''}<section class="discovery-browse"><div class="discovery-tabs" role="tablist" aria-label="Danh sách giải"><button role="tab" aria-selected="${category==='upcoming'}" data-category="upcoming" class="${category==='upcoming'?'selected':''}">📅 Giải sắp diễn ra <span>${upcoming.length}</span></button><button role="tab" aria-selected="${category==='completed'}" data-category="completed" class="${category==='completed'?'selected':''}">🏆 Giải đã kết thúc <span>${completed.length}</span></button></div><div class="discovery-grid" role="tabpanel">${shown.map(x=>discoveryCard(x)).join('')||`<p class="discovery-empty">${category==='upcoming'?'Chưa có giải sắp diễn ra.':'Chưa có giải đã kết thúc.'}</p>`}</div></section></main>`;
+ document.querySelector('#adminLogin').onclick=login;
+ document.querySelectorAll('[data-category]').forEach(b=>b.onclick=()=>publicDashboard(b.dataset.category));
+ document.querySelectorAll('[data-hub]').forEach(b=>b.onclick=e=>{e.stopPropagation();publicTournament(b.dataset.hub)});
+ document.querySelectorAll('[data-info]').forEach(b=>b.onclick=e=>{e.stopPropagation();publicTournamentInfo(b.dataset.info)});
+ document.querySelectorAll('[data-enter-tournament]').forEach(card=>{card.onclick=()=>publicTournament(card.dataset.enterTournament);card.onkeydown=e=>{if(e.target===card&&(e.key==='Enter'||e.key===' ')){e.preventDefault();publicTournament(card.dataset.enterTournament)}}});
+ discoveryTimer=setInterval(()=>{if(vietnamToday()!==today)publicDashboard(category)},60000);
+}
+
+const posterBucket='tournament-posters';
+const posterPathValid=(tid,path)=>typeof path==='string'&&new RegExp(`^${tid}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png|webp)$`).test(path);
+function posterUrl(tid,path){return posterPathValid(tid,path)?supabase.storage.from(posterBucket).getPublicUrl(path).data.publicUrl:null}
+async function publicTournamentInfo(tid){
+ stopLive();const epoch=++renderEpoch;
+ const [{data:t,error},{data:info}]=await Promise.all([
+  supabase.from('tournaments').select('id,name,event_type,format,start_date').eq('id',tid).single(),
+  supabase.from('tournament_info').select('content,prize_information,rules,poster_path').eq('tournament_id',tid).maybeSingle()
+ ]);
+ if(epoch!==renderEpoch)return;
+ if(error||!t)return publicDashboard();
+ const image=posterUrl(t.id,info?.poster_path);
+ const section=(title,value)=>value?.trim()?`<section class="event-info-section"><h2>${title}</h2><p>${esc(value)}</p></section>`:'';
+ app.innerHTML=`<header class="public-header public-home-header"><div class="pantry-header-brand">${pantryLogoMarkup('pantry-logo-public')}<span>Tournament</span></div><button class="ghost" id="infoBack">← Danh sách giải</button></header><main class="wrap event-info-page"><div class="event-info-hero">${image?`<div class="event-poster"><img src="${esc(image)}" alt="Poster ${esc(t.name)}" loading="eager"></div>`:''}<div class="event-info-identity"><small>${eventType(t)} · ${eventFormat(t)}</small><h1>${esc(t.name)}</h1><p>${esc(displayEventDate(t.start_date))}</p><button id="infoToHub">XEM CHI TIẾT THI ĐẤU →</button></div></div>${section('THÔNG TIN GIẢI',info?.content)}${section('GIẢI THƯỞNG',info?.prize_information)}${section('QUY ĐỊNH',info?.rules)}</main>`;
+ const poster=app.querySelector('.event-poster img');if(poster)poster.onerror=()=>poster.parentElement.remove();
+ document.querySelector('#infoBack').onclick=()=>publicDashboard();document.querySelector('#infoToHub').onclick=()=>publicTournament(tid);
 }
 async function publicTournament(tid,tab='overview'){
  stopLive();const epoch=++renderEpoch;
@@ -230,12 +269,24 @@ function deleteTournamentModal(tournament){
  cancel.onclick=()=>modal.innerHTML='';
  confirm.onclick=async()=>{
   confirm.disabled=true;cancel.disabled=true;confirm.textContent='Đang xóa…';
+  let posterPath=null,posterLookupFailed=false;
+  try{
+   const {data:info,error:lookupError}=await supabase.from('tournament_info').select('poster_path').eq('tournament_id',tournament.id).maybeSingle();
+   posterLookupFailed=!!lookupError;posterPath=info?.poster_path||null;
+  }catch{posterLookupFailed=true}
   const {error}=await supabase.rpc('delete_tournament',{p_tournament_id:tournament.id});
   if(error){confirm.disabled=false;cancel.disabled=false;confirm.textContent='Xóa giải';modal.querySelector('#deleteTournamentMsg').textContent=error.message;return}
   modal.innerHTML='';
   document.querySelectorAll('.tournament-card').forEach(c=>{if(c.dataset.id===tournament.id)c.remove()});
   if(!document.querySelector('.tournament-card'))document.querySelector('#tournamentCards').innerHTML='<div class="empty">Chưa có giải nào. Tạo giải đầu tiên để bắt đầu.</div>';
   document.querySelector('#dashboardMsg').textContent='✓ Đã xóa giải';
+  if(posterLookupFailed)document.querySelector('#dashboardMsg').textContent='✓ Đã xóa giải. Không thể kiểm tra poster cũ; Admin cần kiểm tra Storage.';
+  else if(posterPathValid(tournament.id,posterPath)){
+   try{
+    const {error:posterError}=await supabase.storage.from(posterBucket).remove([posterPath]);
+    if(posterError)throw posterError;
+   }catch{document.querySelector('#dashboardMsg').textContent='✓ Đã xóa giải. Không thể dọn poster; Admin cần kiểm tra Storage.'}
+  }
  };
 }
 
@@ -247,12 +298,89 @@ async function workspace(id,tab='overview'){
   const {data:t}=await supabase.from('tournaments').select('*').eq('id',id).single(); if(epoch!==renderEpoch)return;currentTournament=t;
   const {data:teams}=await supabase.from('teams').select('*').eq('tournament_id',id).order('registration_order');
   if(epoch!==renderEpoch)return;
-  app.innerHTML=`<header class="workspace-header"><div><button class="ghost" id="back">← Dashboard</button>${pantryLogoMarkup('pantry-logo-small')}<b>${esc(t.name)}</b></div><div>${t.format==='mlp'?'MLP':'ĐÁNH ĐÔI'} · ${esc(t.start_date)}</div></header><main class="wrap ${tab==='matches'?'match-control-page':''}"><div class="workspace"><aside>${navButton('overview','Tổng quan',tab)}${navButton('teams','VĐV / Đội',tab)}${navButton('groups','Chia bảng',tab)}${navButton('matches','Trận đấu',tab)}${navButton('standings','BXH',tab)}${navButton('referees','Trọng tài',tab)}${navButton('knockout','Knockout',tab)}${navButton('awards','🏆 Vinh danh',tab)}</aside><section id="workcontent"></section></div></main><div id="modal"></div>`;
+  app.innerHTML=`<header class="workspace-header"><div><button class="ghost" id="back">← Dashboard</button>${pantryLogoMarkup('pantry-logo-small')}<b>${esc(t.name)}</b></div><div>${t.format==='mlp'?'MLP':'ĐÁNH ĐÔI'} · ${esc(t.start_date)}</div></header><main class="wrap ${tab==='matches'?'match-control-page':''}"><div class="workspace"><aside>${navButton('overview','Tổng quan',tab)}${navButton('info','Thông tin giải',tab)}${navButton('teams','VĐV / Đội',tab)}${navButton('groups','Chia bảng',tab)}${navButton('matches','Trận đấu',tab)}${navButton('standings','BXH',tab)}${navButton('referees','Trọng tài',tab)}${navButton('knockout','Knockout',tab)}${navButton('awards','🏆 Vinh danh',tab)}</aside><section id="workcontent"></section></div></main><div id="modal"></div>`;
   document.querySelector('#back').onclick=dashboard;
   document.querySelectorAll('aside button[data-tab]').forEach(b=>b.onclick=()=>workspace(id,b.dataset.tab));
-  if(tab==='overview')renderOverview(t,teams||[]); if(tab==='teams')renderTeams(t,teams||[]); if(tab==='groups')showGroups(id); if(tab==='matches')renderMatches(id); if(tab==='standings')renderStandings(id); if(tab==='referees')renderRefereeAdmin(id); if(tab==='knockout')renderKnockout(id); if(tab==='awards')renderAwards(id,teams||[]);
+  if(tab==='overview')renderOverview(t,teams||[]); if(tab==='info')renderTournamentInfoEditor(t); if(tab==='teams')renderTeams(t,teams||[]); if(tab==='groups')showGroups(id); if(tab==='matches')renderMatches(id); if(tab==='standings')renderStandings(id); if(tab==='referees')renderRefereeAdmin(id); if(tab==='knockout')renderKnockout(id); if(tab==='awards')renderAwards(id,teams||[]);
 }
 function navButton(k,label,active){return `<button data-tab="${k}" class="${k===active?'nav-active':''}">${label}</button>`}
+const posterTypes={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'};
+async function renderTournamentInfoEditor(t,{preserveOnError=false}={}){
+ const epoch=renderEpoch,area=document.querySelector('#workcontent');
+ const {data:info,error}=await supabase.from('tournament_info').select('content,prize_information,rules,poster_path').eq('tournament_id',t.id).maybeSingle();
+ if(epoch!==renderEpoch)return false;
+ if(error){if(!preserveOnError)area.innerHTML=`<div class="panel">${esc(error.message)}</div>`;return false}
+ const isAdmin=String(profile?.role||'').toLowerCase()==='admin',image=posterUrl(t.id,info?.poster_path);
+ area.innerHTML=`<section class="info-editor"><div class="page-kicker">TRANG SỰ KIỆN CÔNG KHAI</div><h1>Thông tin giải</h1><p class="muted">Nội dung này xuất hiện trên trang Thông tin giải.</p><div class="panel"><h2>POSTER GIẢI</h2><div id="posterPreview" class="editor-poster">${image?`<img src="${esc(image)}" alt="Poster hiện tại">`:'<p>Chưa có poster.</p>'}</div>${isAdmin?'<label>Chọn poster mới<input id="posterUpload" type="file" accept="image/jpeg,image/png,image/webp"></label><button type="button" class="secondary" id="removePoster">Gỡ poster</button>':''}</div><div class="panel"><label>NỘI DUNG GIẢI<textarea id="eventContent" rows="7" ${isAdmin?'':'readonly'} placeholder="Giới thiệu và nội dung giải">${esc(info?.content||'')}</textarea></label><label>GIẢI THƯỞNG<textarea id="eventPrizes" rows="5" ${isAdmin?'':'readonly'} placeholder="Thông tin giải thưởng">${esc(info?.prize_information||'')}</textarea></label><label>QUY ĐỊNH<textarea id="eventRules" rows="7" ${isAdmin?'':'readonly'} placeholder="Thể lệ và quy định">${esc(info?.rules||'')}</textarea></label>${isAdmin?'<button id="saveEventInfo">Lưu thông tin giải</button>':''}<p id="eventInfoMessage" role="status"></p></div></section>`;
+ if(!isAdmin)return true;
+ const savedInfo=info||{poster_path:null};
+ let pendingPoster=null,removePoster=false;
+ const preview=area.querySelector('#posterPreview'),fileInput=area.querySelector('#posterUpload'),message=area.querySelector('#eventInfoMessage');
+ fileInput.onchange=()=>{
+  const file=fileInput.files?.[0];pendingPoster=null;
+  if(!file)return;
+  if(!posterTypes[file.type]||file.size>5*1024*1024||file.size===0){fileInput.value='';message.textContent='Chỉ nhận JPEG, PNG hoặc WebP tối đa 5 MB.';return}
+  pendingPoster=file;removePoster=false;message.textContent='Poster mới sẽ được tải lên khi lưu.';
+  const url=URL.createObjectURL(file);preview.replaceChildren();const img=document.createElement('img');img.src=url;img.alt='Xem trước poster';img.onload=()=>URL.revokeObjectURL(url);preview.append(img);
+ };
+ area.querySelector('#removePoster').onclick=()=>{pendingPoster=null;removePoster=true;fileInput.value='';preview.innerHTML='<p>Poster sẽ được gỡ khi lưu.</p>';message.textContent='';};
+ area.querySelector('#saveEventInfo').onclick=async()=>{
+  const button=area.querySelector('#saveEventInfo');button.disabled=true;message.textContent='Đang lưu…';
+  const oldPath=savedInfo.poster_path;
+  let nextPath=removePoster?null:oldPath,newPath=null,newPosterUploaded=false;
+  // Phase A: upload a distinct object; a failed upload never owns that path.
+  if(pendingPoster){
+   try{
+    const bytes=new Uint8Array(await pendingPoster.slice(0,12).arrayBuffer());
+    const jpeg=bytes[0]===255&&bytes[1]===216&&bytes[2]===255;
+    const png=bytes.slice(0,8).join(',')==='137,80,78,71,13,10,26,10';
+    const webp=String.fromCharCode(...bytes.slice(0,4))==='RIFF'&&String.fromCharCode(...bytes.slice(8,12))==='WEBP';
+    if(!(pendingPoster.type==='image/jpeg'&&jpeg||pendingPoster.type==='image/png'&&png||pendingPoster.type==='image/webp'&&webp))throw new Error('Nội dung tệp không đúng định dạng ảnh đã chọn.');
+    const candidatePath=`${t.id}/${crypto.randomUUID()}.${posterTypes[pendingPoster.type]}`;
+    const {error:uploadError}=await supabase.storage.from(posterBucket).upload(candidatePath,pendingPoster,{contentType:pendingPoster.type,upsert:false});
+    if(uploadError)throw uploadError;
+    newPath=candidatePath;newPosterUploaded=true;nextPath=newPath;
+   }catch(err){message.textContent=err.message||'Không thể tải poster mới.';button.disabled=false;return}
+  }
+  // Phase B: only a confirmed database failure may roll back the new object.
+  const payload={tournament_id:t.id,content:area.querySelector('#eventContent').value,prize_information:area.querySelector('#eventPrizes').value,rules:area.querySelector('#eventRules').value,poster_path:nextPath,updated_at:new Date().toISOString()};
+  let saveError,saveOutcomeUnknown=false;
+  try{({error:saveError}=await supabase.from('tournament_info').upsert(payload,{onConflict:'tournament_id'}))}
+  catch(err){saveError=err;saveOutcomeUnknown=true}
+  if(saveError){
+   try{
+    const {data:current,error:verifyError}=await supabase.from('tournament_info').select('poster_path').eq('tournament_id',t.id).maybeSingle();
+    if(verifyError)throw verifyError;
+    if(current&&current.poster_path===nextPath&&(newPosterUploaded||oldPath!==nextPath))saveError=null;
+    else saveOutcomeUnknown=false;
+   }catch{saveOutcomeUnknown=true}
+  }
+  if(saveError){
+   let rollbackWarning='';
+   if(newPosterUploaded&&!saveOutcomeUnknown){
+    try{const {error:removeError}=await supabase.storage.from(posterBucket).remove([newPath]);if(removeError)throw removeError}
+    catch{rollbackWarning=' Chưa xóa được file mới khỏi Storage.'}
+   }
+   if(saveOutcomeUnknown)rollbackWarning=' Không xác định được kết quả lưu; file mới được giữ để tránh làm hỏng poster đang hiển thị. Admin cần kiểm tra lại.';
+   message.textContent=(saveError.message||'Không thể lưu thông tin giải.')+rollbackWarning;
+   button.disabled=false;return;
+  }
+  // Phase C: the database now owns nextPath. Never roll it back below.
+  savedInfo.poster_path=nextPath;pendingPoster=null;removePoster=false;fileInput.value='';
+  let cleanupWarning='';
+  if(oldPath&&oldPath!==nextPath&&posterPathValid(t.id,oldPath)){
+   try{const {error:cleanupError}=await supabase.storage.from(posterBucket).remove([oldPath]);if(cleanupError)throw cleanupError}
+   catch{cleanupWarning=nextPath?' Không thể xóa file poster cũ.':' Đã gỡ poster khỏi giải nhưng chưa xóa được file cũ.'}
+  }
+  try{
+   const refreshed=await renderTournamentInfoEditor(t,{preserveOnError:true});
+   if(refreshed){document.querySelector('#eventInfoMessage').textContent='✓ Đã lưu thông tin giải'+cleanupWarning;return}
+  }catch{}
+  if(message.isConnected)message.textContent='✓ Đã lưu thông tin giải'+cleanupWarning+' Không thể làm mới màn hình; hãy mở lại Thông tin giải.';
+  button.disabled=false;
+ };
+ return true;
+}
 const awardLabels={1:'VÔ ĐỊCH',2:'Á QUÂN',3:'HẠNG BA'};
 const awardMedals={1:'🥇',2:'🥈',3:'🥉'};
 function awardShowcase(awards){
