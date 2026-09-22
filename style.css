@@ -94,3 +94,10 @@
  .scorekeeper-shell .scorekeeper-header .pantry-logo-scorekeeper{width:38px}
 }
 @media(max-width:480px){.ref-start-options{flex-direction:row;align-items:center}}
+.ref-admin-code{margin:12px 0;padding:11px 13px;background:#f7f5ee;border:1px solid #e2dfd5;border-radius:12px}
+.ref-admin-code small{font-size:10px;font-weight:900;letter-spacing:.12em;color:#7a6c4d}
+.ref-admin-code-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:5px}
+.ref-admin-code-row strong{font:800 clamp(22px,5vw,29px)/1.1 ui-monospace,SFMono-Regular,monospace;letter-spacing:.06em;color:#303723;overflow-wrap:anywhere}
+.ref-admin-code-row button{flex:none;padding:8px 10px;font-size:12px}
+.ref-admin-code p{margin:7px 0 0;font-size:12px;line-height:1.4;color:#777268}
+.ref-copy-feedback:not(:empty){display:block;margin-top:5px;font-size:12px;font-weight:800;color:#4c6534}
