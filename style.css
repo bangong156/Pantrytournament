@@ -101,3 +101,32 @@
 .ref-admin-code-row button{flex:none;padding:8px 10px;font-size:12px}
 .ref-admin-code p{margin:7px 0 0;font-size:12px;line-height:1.4;color:#777268}
 .ref-copy-feedback:not(:empty){display:block;margin-top:5px;font-size:12px;font-weight:800;color:#4c6534}
+
+/* Tournament honors */
+.awards-editor-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.awards-editor-card{margin-top:0;min-width:0}
+.awards-editor-title{display:flex;align-items:center;gap:9px;padding-bottom:12px;border-bottom:1px solid #e2dfd5}
+.awards-editor-title span{font-size:25px}
+.awards-editor-title h2{margin:0;font-size:17px;letter-spacing:.05em}
+.awards-editor-card label{font-size:13px;margin:14px 0 0}
+.awards-editor-card input,.awards-editor-card textarea{width:100%;font-size:14px}
+.awards-editor-card textarea{resize:vertical;min-height:110px}
+.awards-delete{margin-top:12px;padding:4px 0;background:transparent;color:#893a32;font-size:12px}
+.awards-save-bar{display:flex;align-items:center;gap:14px;margin-top:18px;color:#3c642f;font-weight:800}
+.awards-save-bar button:disabled,.awards-delete:disabled{opacity:.55}
+.awards-view-team{margin-top:18px;font-size:18px;font-weight:800;overflow-wrap:anywhere}
+.awards-view-players{white-space:pre-line;line-height:1.55;color:#686b62}
+.awards-showcase{margin:28px 0 34px;padding:25px;background:#eeece2;border:1px solid #d9d4c5;border-radius:20px;text-align:center}
+.awards-showcase-heading small{color:#7a6c4d;font-size:10px;font-weight:900;letter-spacing:.16em}
+.awards-showcase-heading h2{margin:5px 0 20px;font-size:27px;letter-spacing:.12em;color:#303723}
+.awards-podium{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;max-width:860px;margin:auto}
+.awards-podium-card{min-width:0;padding:20px 18px;background:#fff;border:1px solid #d9d4c5;border-radius:16px}
+.awards-podium-1{grid-column:1/-1;max-width:560px;width:100%;justify-self:center;border-color:#9da581;background:#fafaf5;padding:27px 22px}
+.awards-medal{font-size:28px;line-height:1.2}
+.awards-podium-1 .awards-medal{font-size:35px}
+.awards-podium-card small{display:block;margin:6px 0 0;color:#6f674f;font-size:11px;font-weight:900;letter-spacing:.13em}
+.awards-podium-card h3{margin:10px 0 5px;color:#26321c;font-size:clamp(19px,2.6vw,27px);overflow-wrap:anywhere}
+.awards-podium-1 h3{font-size:clamp(24px,3vw,34px)}
+.awards-podium-card p{white-space:pre-line;margin:8px 0 0;color:#666459;line-height:1.5;overflow-wrap:anywhere}
+@media(max-width:1024px){.awards-editor-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.awards-editor-grid,.awards-podium{grid-template-columns:1fr}.awards-podium-1{grid-column:auto}.awards-showcase{padding:20px 14px}.awards-save-bar{align-items:flex-start;flex-direction:column}}
