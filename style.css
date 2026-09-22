@@ -79,6 +79,8 @@
 .workspace-header>div:first-child b,.public-tournament-header>div:first-child b,.ref-header>div:first-child b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .public-tournament-header>div:first-child{gap:12px}
 .scorekeeper-shell .scorekeeper-header .pantry-logo-scorekeeper{align-self:center}
+.ref-start-options input[data-ref-target]{width:78px;min-height:44px;padding:8px 10px;text-align:center;font-weight:800}
+.ref-target-error:not(:empty){margin-top:8px;color:#9b3d2f;font-size:13px;font-weight:700}
 @media(max-width:700px){
  .dashboard-header .dashboard-account{font-size:11px;gap:7px}
  .dashboard-header .dashboard-account .ghost{padding:8px}
@@ -91,3 +93,4 @@
  .public-tournament-header #beReferee{padding:9px;font-size:12px;white-space:nowrap}
  .scorekeeper-shell .scorekeeper-header .pantry-logo-scorekeeper{width:38px}
 }
+@media(max-width:480px){.ref-start-options{flex-direction:row;align-items:center}}
