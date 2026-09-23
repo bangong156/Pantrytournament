@@ -4,7 +4,15 @@ export function videoRepository({url,key}){
   const db=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
   const check=({data,error})=>{if(error)throw new VideoError(error.code==='23505'?409:503,error.code==='23505'?'Trận này đã có phiên LIVE. Hãy kết thúc phiên cũ trước.':'Không thể truy cập dịch vụ LIVE.');return data;};
   return {
-    async staff(token){const {data,error}=await db.auth.getUser(token);if(error||!data?.user)throw new VideoError(401,'Vui lòng đăng nhập lại.');const p=check(await db.from('profiles').select('role').eq('id',data.user.id).maybeSingle());if(!['admin','staff'].includes(String(p?.role).toLowerCase()))throw new VideoError(403,'Chỉ Admin / Staff được quản lý LIVE.');return data.user.id;},
+    async staff(token){
+      const {data,error}=await db.auth.getUser(token);
+      if(error||!data?.user)throw new VideoError(401,'Vui lòng đăng nhập lại.');
+      const result=await db.from('profiles').select('role').eq('id',data.user.id).maybeSingle();
+      if(result.error)console.error({code:result.error.code,status:result.status});
+      const p=check(result);
+      if(!['admin','staff'].includes(String(p?.role).toLowerCase()))throw new VideoError(403,'Chỉ Admin / Staff được quản lý LIVE.');
+      return data.user.id;
+    },
     async rate(key,limit){if(!check(await db.rpc('match_video_take_rate',{p_key:digest(key),p_limit:limit})))throw new VideoError(429,'Quá nhiều yêu cầu. Vui lòng đợi một phút.');},
     async match(id){return check(await db.from('matches').select('id,event_id,tournament_id,match_code').eq('id',id).maybeSingle());},
     async get(id){return check(await db.from('match_video_sessions').select('*').eq('id',id).maybeSingle());},
