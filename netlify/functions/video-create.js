@@ -6,11 +6,20 @@ import {VideoError,capability,digest,secretBox} from '../../server/video-securit
 
 export function dependencies(){
   const env=process.env;
-  if(!env.SUPABASE_URL||!env.SUPABASE_SERVICE_ROLE_KEY)throw new VideoError(503,'LIVE chưa được cấu hình.');
+  const invalid=name=>{console.error(name);throw new VideoError(503,'LIVE chưa được cấu hình.');};
+  if(!env.SUPABASE_URL)invalid('SUPABASE_URL');
+  if(!env.SUPABASE_SERVICE_ROLE_KEY)invalid('SUPABASE_SERVICE_ROLE_KEY');
   return {
     repository:videoRepository({url:env.SUPABASE_URL,key:env.SUPABASE_SERVICE_ROLE_KEY}),
-    stream:cloudflareStream({accountId:env.CLOUDFLARE_ACCOUNT_ID,apiToken:env.CLOUDFLARE_API_TOKEN}),
-    box:secretBox(env.VIDEO_ENCRYPTION_KEY)
+    stream:(()=>{
+      if(!/^[a-f0-9]{32}$/i.test(env.CLOUDFLARE_ACCOUNT_ID||''))invalid('CLOUDFLARE_ACCOUNT_ID');
+      if(!env.CLOUDFLARE_API_TOKEN)invalid('CLOUDFLARE_API_TOKEN');
+      return cloudflareStream({accountId:env.CLOUDFLARE_ACCOUNT_ID,apiToken:env.CLOUDFLARE_API_TOKEN});
+    })(),
+    box:(()=>{
+      if(Buffer.from(env.VIDEO_ENCRYPTION_KEY||'','base64').length!==32)invalid('VIDEO_ENCRYPTION_KEY');
+      return secretBox(env.VIDEO_ENCRYPTION_KEY);
+    })()
   };
 }
 
