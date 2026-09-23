@@ -257,3 +257,14 @@
 @media(max-width:600px) { .competition-grid { grid-template-columns: 1fr; } .workspace-header b { overflow-wrap:anywhere; } }
 
 .competition-events button:disabled { opacity: .5; cursor: not-allowed; }
+@media(max-width:900px){
+  .match-control-page .match-card{grid-template-columns:minmax(0,1fr)}
+  .match-control-page .match-card>*{grid-column:1;min-width:0}
+  .match-control-page .match-card .call-order{display:grid;grid-template-columns:31px minmax(0,1fr);width:100%}
+  .match-control-page .match-card .call-order small{white-space:normal;overflow-wrap:anywhere}
+  .match-control-page .match-card .video-enable{grid-column:1/-1;justify-self:start;min-height:44px;margin-top:0}
+  .match-control-page .match-card .versus{grid-template-columns:minmax(0,1fr)}
+  .match-control-page .match-card .team-name{min-width:0;white-space:normal;overflow-wrap:anywhere}
+  .match-control-page .match-card .score-box,.match-control-page .match-card .series-result{justify-content:flex-start}
+  .match-control-page .match-card .save-score,.match-control-page .match-card .open-mlp{min-height:44px}
+}
