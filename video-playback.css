@@ -1,0 +1,6 @@
+.public-video-slot{grid-column:1/-1;font-size:12px;color:#64748b}
+.public-video-button{min-height:40px;padding:8px 14px;font-size:13px}
+.public-video-player{width:min(760px,94vw);max-width:760px;padding:20px}
+.public-video-player h2{font-size:20px}
+.public-video-player video{display:block;width:100%;aspect-ratio:16/9;max-height:65dvh;background:#111;border-radius:10px}
+.public-video-player p{min-height:2.5em;margin:14px 0}

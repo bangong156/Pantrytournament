@@ -6,9 +6,9 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "latest",
+    "qrcode": "1.5.4",
     "vite": "latest",
     "xlsx": "latest"
   },
-  "devDependencies": {},
   "type": "module"
 }

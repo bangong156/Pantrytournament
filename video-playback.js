@@ -1,0 +1,85 @@
+import './video-playback.css';
+
+let dispose=()=>{};
+export function stopPublicVideo(){dispose();dispose=()=>{};}
+
+async function readStreams(scope,signal){
+  const response=await fetch('/.netlify/functions/video-playback?'+new URLSearchParams(scope),{cache:'no-store',signal});
+  const result=await response.json();
+  if(!response.ok)throw new Error(result.error||'Không thể tải video LIVE.');
+  return result.streams;
+}
+
+export function mountPublicVideo(scope){
+  stopPublicVideo();
+  const slots=[...document.querySelectorAll('[data-public-video]')];
+  const controller=new AbortController();let timer,closePlayer=()=>{};
+  dispose=()=>{clearTimeout(timer);controller.abort();closePlayer();};
+  const refresh=async()=>{
+    try{
+      const streams=await readStreams(scope,controller.signal);
+      if(controller.signal.aborted)return;
+      const active=new Map(streams.map(row=>[row.match_id,row]));
+      for(const slot of slots){
+        slot.replaceChildren();
+        if(active.has(slot.dataset.publicVideo)){
+          const button=document.createElement('button');button.textContent='🔴 VIDEO LIVE';button.className='public-video-button';
+          button.onclick=()=>{closePlayer();closePlayer=openPlayer({...scope,match_id:slot.dataset.publicVideo},slot.dataset.videoLabel,()=>{slot.textContent='Video ngoại tuyến / đã kết thúc';});};
+          slot.append(button);
+        }else slot.textContent='Video ngoại tuyến / đã kết thúc';
+      }
+    }catch{
+      if(!controller.signal.aborted)slots.forEach(slot=>{slot.textContent='Chưa xác định trạng thái video';});
+    }finally{if(!controller.signal.aborted)timer=setTimeout(refresh,10000);}
+  };
+  refresh();
+}
+
+function openPlayer(scope,label,onOffline){
+  const host=document.querySelector('#modal');
+  host.innerHTML='<div class="overlay"><section class="modal public-video-player" role="dialog" aria-modal="true" aria-label="Video trực tiếp"><div class="modalhead"><h2></h2><button class="x" aria-label="Đóng">×</button></div><video controls autoplay muted playsinline></video><p role="status" aria-live="polite">Đang kết nối video LIVE…</p><button class="secondary" data-retry>Thử lại</button></section></div>';
+  const panel=host.querySelector('.public-video-player'),video=panel.querySelector('video'),message=panel.querySelector('p'),retry=panel.querySelector('[data-retry]');
+  panel.querySelector('h2').textContent=`Video LIVE · ${label||'Trận đấu'}`;
+  const controller=new AbortController();let peer,viewerURL,timer,sessionId,closed=false,checking=false;
+  const release=()=>{
+    if(peer){peer.onconnectionstatechange=null;peer.close();peer=null;}
+    video.srcObject?.getTracks().forEach(track=>track.stop());video.srcObject=null;
+    if(viewerURL){fetch(viewerURL,{method:'DELETE',keepalive:true}).catch(()=>{});viewerURL=null;}
+  };
+  const close=()=>{if(closed)return;closed=true;clearTimeout(timer);controller.abort();release();if(panel.isConnected)host.replaceChildren();window.removeEventListener('pagehide',close);};
+  panel.querySelector('.x').onclick=close;
+  host.querySelector('.overlay').onclick=event=>{if(event.target===panel.parentElement)close();};
+  window.addEventListener('pagehide',close);
+  const check=async()=>{
+    if(closed||checking)return;checking=true;clearTimeout(timer);retry.disabled=true;
+    try{
+      const [stream]=await readStreams(scope,controller.signal);
+      if(closed)return;
+      if(!stream){release();sessionId=null;message.textContent='Video ngoại tuyến / buổi phát đã kết thúc.';onOffline();return;}
+      if(peer&&sessionId===stream.session_id)return;
+      release();sessionId=stream.session_id;
+      if(!window.RTCPeerConnection)throw new Error('Trình duyệt chưa hỗ trợ video LIVE. Hãy mở bằng Safari hoặc Chrome.');
+      peer=new RTCPeerConnection({bundlePolicy:'max-bundle'});
+      const connection=peer,media=new MediaStream();video.srcObject=media;
+      peer.addTransceiver('video',{direction:'recvonly'});peer.addTransceiver('audio',{direction:'recvonly'});
+      peer.ontrack=event=>{media.addTrack(event.track);video.play().catch(()=>{message.textContent='Bấm phát trên video để xem LIVE.';});};
+      peer.onconnectionstatechange=()=>{
+        if(connection.connectionState==='connected')message.textContent='🔴 VIDEO LIVE · Bật âm thanh bằng nút trên video.';
+        if(connection.connectionState==='disconnected')message.textContent='Video tạm gián đoạn. Đang kiểm tra lại…';
+        if(connection.connectionState==='failed'){release();message.textContent='Mất kết nối video. Đang kiểm tra lại…';}
+      };
+      await connection.setLocalDescription(await connection.createOffer());
+      // WHEP accepts the initial offer without client-side ICE trickling.
+      const response=await fetch(stream.playback_url,{method:'POST',headers:{'Content-Type':'application/sdp'},body:connection.localDescription.sdp,signal:controller.signal});
+      if(response.status!==201)throw new Error('Video ngoại tuyến hoặc kết nối bị gián đoạn. Vui lòng thử lại.');
+      const location=response.headers.get('Location');
+      if(location){const url=new URL(location,stream.playback_url);if(url.origin===new URL(stream.playback_url).origin)viewerURL=url.href;}
+      const answer=await response.text();
+      if(closed)return;
+      await connection.setRemoteDescription({type:'answer',sdp:answer});
+    }catch(error){if(!closed){release();message.textContent=error instanceof SyntaxError?'Không thể tải video LIVE lúc này.':error.message;}}
+    finally{checking=false;if(!closed){retry.disabled=false;timer=setTimeout(check,10000);}}
+  };
+  retry.onclick=()=>{if(!checking){release();check();}};
+  check();return close;
+}
