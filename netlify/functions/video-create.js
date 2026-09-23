@@ -25,18 +25,27 @@ export function dependencies(){
 
 export function createHandler(getDependencies=dependencies){
   return async event=>{
+    let operation;
+    const logFailure=(operation,error)=>{
+      const details={operation};
+      if(Number.isInteger(error?.status)&&error.status>=100&&error.status<=599)details.status=error.status;
+      if(operation==='Cloudflare'&&Number.isSafeInteger(error?.cloudflareCode))details.cloudflare_code=error.cloudflareCode;
+      console.error(details);
+    };
     const reply=(statusCode,body)=>({statusCode,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...(statusCode===405?{Allow:'POST'}:{})},body:JSON.stringify(body)});
     try{
       if(event.httpMethod!=='POST')return reply(405,{error:'Chỉ hỗ trợ POST.'});
       const authorization=event.headers?.authorization||event.headers?.Authorization||'';
       const token=/^Bearer (\S+)$/i.exec(authorization)?.[1];
-      if(!token)throw new VideoError(401,'Vui lòng đăng nhập lại.');
+      if(!token){operation='authentication';throw new VideoError(401,'Vui lòng đăng nhập lại.');}
       const body=event.isBase64Encoded?Buffer.from(event.body||'','base64').toString('utf8'):event.body||'';
       if(Buffer.byteLength(body)>4096)throw new VideoError(413,'Yêu cầu quá lớn.');
       let payload;
       try{payload=JSON.parse(body);}catch{throw new VideoError(400,'Yêu cầu không hợp lệ.');}
       const {repository,stream,box}=getDependencies();
+      operation='authentication';
       const userId=await repository.staff(token);
+      operation='database';
       await repository.rate(`video-create:${userId}`,10);
       const match=await requireVideoMatch(repository,payload?.match_id);
       const now=Date.now(),invite=capability();
@@ -49,7 +58,9 @@ export function createHandler(getDependencies=dependencies){
       });
       let input;
       try{
+        operation='Cloudflare';
         input=await stream.create(row);
+        operation='database';
         await requireVideoSessionMatch(repository,row);
         const ready=await repository.cas(row,{
           status:'ready',input_uid:input.uid,credentials_ciphertext:box.seal({publish:input.publish}),
@@ -63,7 +74,7 @@ export function createHandler(getDependencies=dependencies){
         // release the active-match slot before a known input has been deleted.
         if(input){
           let removed=false;
-          try{await stream.remove(input.uid);removed=true;}catch{}
+          try{await stream.remove(input.uid);removed=true;}catch(error){logFailure('Cloudflare',error);}
           try{
             const current=await repository.get(row.id);
             if(current&&['creating','ready'].includes(current.status)){
@@ -71,11 +82,12 @@ export function createHandler(getDependencies=dependencies){
                 status:'ended',ended_at:new Date().toISOString(),credentials_ciphertext:null,playback_url:null
               }:{status:'stopping',input_uid:input.uid,cleanup_after:new Date().toISOString()});
             }
-          }catch{}
+          }catch(error){logFailure('database',error);}
         }
         throw error;
       }
     }catch(error){
+      if(operation)logFailure(operation,error);
       return reply(error instanceof VideoError?error.status:503,{error:error instanceof VideoError?error.message:'Không thể tạo phiên LIVE. Vui lòng thử lại.'});
     }
   };
