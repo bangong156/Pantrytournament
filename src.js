@@ -52,7 +52,7 @@ async function getOrCreatePlayer(fullName, gender=null){
   if(error) throw error;
   return data;
 }
-async function boot(){if(new URLSearchParams(location.search).has('broadcaster')){const {renderBroadcaster}=await import('./video-ui.js');return renderBroadcaster(app)}const linked=linkedTournament(location.search);if(linked)return publicTournament(linked);({data:{session}}=await supabase.auth.getSession()); if(session){const {data}=await supabase.from('profiles').select('*').eq('id',session.user.id).single();profile=data;return render()}if(await restoreRefereeSession())return;render()}
+async function boot(){if(new URLSearchParams(location.search).has('broadcaster')){const {renderBroadcaster}=await import('./video-ui.js');return renderBroadcaster(app)}const linked=linkedTournament(location.search);if(linked)return new URLSearchParams(location.search).get('view')==='info'?publicTournamentInfo(linked):publicTournament(linked);({data:{session}}=await supabase.auth.getSession()); if(session){const {data}=await supabase.from('profiles').select('*').eq('id',session.user.id).single();profile=data;return render()}if(await restoreRefereeSession())return;render()}
 function render(){if(!session)return publicDashboard(); dashboard()}
 
 const vietnamToday=()=>{const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(p=>[p.type,p.value]));return `${parts.year}-${parts.month}-${parts.day}`};

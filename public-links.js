@@ -5,6 +5,7 @@ export function linkedTournament(search){
 export function tournamentURL(id){
   const url=new URL('/',location.origin);
   url.searchParams.set('tournament',id);
+  url.searchParams.set('view','info');
   return url.href;
 }
 export async function shareTournament(id,name){

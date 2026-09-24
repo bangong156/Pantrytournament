@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {linkedTournament,tournamentURL,shareTournament} from '../public-links.js';
 const id='11111111-1111-4111-8111-111111111111';
 globalThis.location={origin:'https://pantry.test'};
-test('tournament URLs contain only the public UUID',()=>{
- assert.equal(tournamentURL(id),`https://pantry.test/?tournament=${id}`);
+test('shared tournament URLs explicitly select the public info view',()=>{
+ assert.equal(tournamentURL(id),`https://pantry.test/?tournament=${id}&view=info`);
  assert.equal(linkedTournament(`?tournament=${id}`),id);
  assert.equal(linkedTournament('?tournament=bad'),null);
 });
@@ -37,4 +37,19 @@ test('public info hero places a working share button immediately below match det
  assert.match(app.innerHTML,/id="infoToHub">XEM CHI TIẾT THI ĐẤU →<\/button><button id="infoShare">CHIA SẺ GIẢI<\/button>/);
  await node('#infoShare').onclick();
  assert.deepEqual(shared,[id,'Cup']);assert.equal(node('#infoShareFeedback').textContent,'Đã sao chép link giải');
+});
+
+
+test('shared links restore info without authentication; plain tournament links retain competition routing',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const vm=await import('node:vm');
+ const source=readFileSync(new URL('../src.js',import.meta.url),'utf8');
+ for(const info of [true,false]){
+  let opened;
+  const context=vm.createContext({URLSearchParams,linkedTournament,location:{search:`?tournament=${id}${info?'&view=info':''}`},
+   publicTournamentInfo:async tid=>{opened=['info',tid]},publicTournament:async tid=>{opened=['competition',tid]}});
+  vm.runInContext(source.slice(source.indexOf('async function boot()'),source.indexOf('\nfunction render()')),context);
+  await vm.runInContext('boot()',context);
+  assert.deepEqual(opened,[info?'info':'competition',id]);
+ }
 });
