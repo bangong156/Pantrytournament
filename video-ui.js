@@ -63,7 +63,7 @@ export function renderBroadcaster(app){
     const timeout=setTimeout(()=>controller.abort(),10000);
     try{
       await post('video-broadcast',request('heartbeat'),null,controller.signal);
-      if(peer===connection)message.textContent='● Đang LIVE';
+      if(peer===connection&&connection.connectionState==='connected')message.textContent='● Đang LIVE';
     }catch(error){
       if(peer!==connection)return;
       if([400,403,404,409,410].includes(error.status)){
@@ -91,7 +91,7 @@ export function renderBroadcaster(app){
       peer=new RTCPeerConnection({bundlePolicy:'max-bundle'});
       media.getTracks().forEach(track=>peer.addTransceiver(track,{direction:'sendonly',streams:[media]}));
       peer.onconnectionstatechange=()=>{
-        if(peer?.connectionState==='connected')message.textContent='● Đang LIVE';
+        if(peer?.connectionState==='connected')heartbeat();
         if(peer?.connectionState==='disconnected')message.textContent='Mạng gián đoạn. Đang chờ kết nối lại…';
         if(peer?.connectionState==='failed'){release();start.disabled=true;stop.disabled=false;message.textContent='Mất kết nối. Bấm Dừng LIVE rồi nhờ quản trị viên tạo QR mới.';}
       };
