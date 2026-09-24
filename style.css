@@ -279,3 +279,14 @@
   .match-control-page .match-card:has(.video-enable) .versus{min-width:0;grid-template-columns:minmax(0,1fr) 30px minmax(0,1fr)}
   .match-control-page .match-card:has(.video-enable) .team-name{min-width:0;overflow-wrap:anywhere}
 }
+
+/* Compact public spectator progress, using the existing Pantry palette. */
+.spectator-summary{display:flex;flex-wrap:wrap;gap:4px;font-size:13px;font-weight:800;padding:12px 0;line-height:1.6}
+.spectator-next{border:1px solid var(--line,#ddd);border-left:4px solid #258b63;border-radius:10px;padding:12px 16px;margin:0 0 16px;background:#fff}
+.spectator-next h2{font-size:12px;letter-spacing:.08em;margin:0 0 8px;color:#527064}
+.spectator-next-teams{display:flex;align-items:center;gap:12px;margin:6px 0;overflow-wrap:anywhere}
+.spectator-next-teams span,.spectator-next small{color:#66756e}
+.discovery-progress{font-size:13px;line-height:1.7}
+.discovery-home .public-hero{padding:16px 0;margin:0}
+.public-hub-match-state{font-size:11px;font-weight:800}
+@media(max-width:600px){.spectator-summary{font-size:11px}.spectator-next{padding:10px 12px}.spectator-next-teams{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;font-size:14px}.discovery-home .public-hero h1{font-size:22px}}

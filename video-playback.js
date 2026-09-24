@@ -20,7 +20,7 @@ async function readStreams(scope,signal){
   });
 }
 
-export function mountPublicVideo(scope){
+export function mountPublicVideo(scope,onStreams=()=>{}){
   stopPublicVideo();
   const slots=[...document.querySelectorAll('[data-public-video]')];
   const controller=new AbortController();let timer,closePlayer=()=>{};
@@ -30,16 +30,20 @@ export function mountPublicVideo(scope){
       const streams=await readStreams(scope,controller.signal);
       if(controller.signal.aborted)return;
       const active=new Map(streams.map(row=>[row.match_id,row]));
+      onStreams(streams);
+      const count=document.querySelector('[data-live-count]');
+      if(count)count.textContent=` • 🔴 ${active.size} LIVE`;
+      document.querySelectorAll('[data-match-state]').forEach(node=>{node.textContent=active.has(node.dataset.matchState)?'🔴 ĐANG ĐẤU':node.dataset.baseStatus;});
       for(const slot of slots){
         slot.replaceChildren();
         if(active.has(slot.dataset.publicVideo)){
-          const button=document.createElement('button');button.textContent='🔴 VIDEO LIVE';button.className='public-video-button';
+          const button=document.createElement('button');button.textContent='XEM LIVE';button.className='public-video-button';
           button.onclick=()=>{closePlayer();closePlayer=openPlayer({...scope,match_id:slot.dataset.publicVideo},slot.dataset.videoLabel,()=>{slot.textContent='Video ngoại tuyến / đã kết thúc';});};
           slot.append(button);
-        }else slot.textContent='Video ngoại tuyến / đã kết thúc';
+        }else slot.textContent='';
       }
     }catch{
-      if(!controller.signal.aborted)slots.forEach(slot=>{slot.textContent='Chưa xác định trạng thái video';});
+      if(!controller.signal.aborted){const count=document.querySelector('[data-live-count]');if(count)count.textContent='';document.querySelectorAll('[data-match-state]').forEach(node=>{node.textContent=node.dataset.baseStatus;});slots.forEach(slot=>{slot.textContent='Chưa xác định trạng thái video';});}
     }finally{if(!controller.signal.aborted)timer=setTimeout(refresh,10000);}
   };
   refresh();
@@ -62,7 +66,7 @@ export function mountHomepageVideo(){
         add('h3',stream.tournament_name);
         add('p',`${stream.event_name} · ${stream.match_code||'Trận đấu'}`);
         add('strong',`${stream.team_a} vs ${stream.team_b}`);
-        const button=add('button','Xem LIVE');
+        const button=add('button','XEM LIVE');
         button.onclick=()=>{closePlayer();closePlayer=openPlayer({tournament_id:stream.tournament_id,event_id:stream.event_id,match_id:stream.match_id},stream.match_code,()=>{card.remove();section.hidden=!cards.children.length;});};
         cards.append(card);
       }

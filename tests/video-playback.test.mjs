@@ -61,6 +61,7 @@ function browser(handler,intercept=()=>undefined){
   const panel={querySelector:selector=>nodes[selector],isConnected:true};
   const overlay=makeNode();panel.parentElement=overlay;
   const host={...makeNode(),querySelector:selector=>selector==='.overlay'?overlay:panel};
+  const liveCount=makeNode(),state={...makeNode(),dataset:{matchState:id,baseStatus:'SẮP ĐẤU'} };
   const homeCards=makeNode(),homeSection={hidden:true,querySelector:()=>homeCards};
   const calls=[],peers=[],timers=[];
   class Peer{
@@ -74,7 +75,7 @@ function browser(handler,intercept=()=>undefined){
   const context=vm.createContext({URLSearchParams,URL,AbortController,Map,RTCPeerConnection:Peer,
     MediaStream:class{getTracks(){return [];}addTrack(){}},
     window:{RTCPeerConnection:Peer,addEventListener(){},removeEventListener(){}},
-    document:{querySelectorAll:()=>[slot],querySelector:selector=>selector==='#homepageLive'?homeSection:host,createElement:()=>makeNode()},
+    document:{querySelectorAll:selector=>selector==='[data-match-state]'?[state]:[slot],querySelector:selector=>selector==='[data-live-count]'?liveCount:selector==='#homepageLive'?homeSection:host,createElement:()=>makeNode()},
     setTimeout:(fn,delay)=>{timers.push({fn,delay,active:true});return timers.length;},clearTimeout:id=>{if(timers[id-1])timers[id-1].active=false;},
     fetch:async(url,options={})=>{
       calls.push({url,options});
@@ -88,7 +89,7 @@ function browser(handler,intercept=()=>undefined){
     }
   });
   vm.runInContext(fs.readFileSync(new URL('../video-playback.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/export /g,''),context);
-  return {slot,host,nodes,calls,peers,timers,homeCards,homeSection,
+  return {slot,host,nodes,calls,peers,timers,homeCards,homeSection,liveCount,state,
     tick:delay=>{const timer=timers.find(t=>t.active&&t.delay===delay);assert.ok(timer,'expected pending timer');timer.active=false;return timer.fn();},
     run:code=>vm.runInContext(code,context)};
 }
@@ -97,7 +98,9 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
 test('public card opens the match-specific inline player through Cloudflare WHEP and removes LIVE after stop',async()=>{
   const f=fixture(),b=browser(f.handler);
   b.run(`mountPublicVideo({tournament_id:'${id}',event_id:'${id}'})`);await settle();
-  assert.equal(b.slot.children[0].textContent,'🔴 VIDEO LIVE');
+  assert.equal(b.slot.children[0].textContent,'XEM LIVE');
+  assert.equal(b.liveCount.textContent,' • 🔴 1 LIVE');
+  assert.equal(b.state.textContent,'🔴 ĐANG ĐẤU');
   b.slot.children[0].onclick();await settle();
   assert.match(b.host.innerHTML,/<video controls autoplay muted playsinline>/);
   assert.equal(b.nodes.h2.textContent,'Video LIVE · A01');
@@ -109,7 +112,9 @@ test('public card opens the match-specific inline player through Cloudflare WHEP
   f.row.status='ended';
   await b.tick(10000);
   assert.equal(b.slot.children.length,0);
-  assert.equal(b.slot.textContent,'Video ngoại tuyến / đã kết thúc');
+  assert.equal(b.slot.textContent,'');
+  assert.equal(b.liveCount.textContent,' • 🔴 0 LIVE');
+  assert.equal(b.state.textContent,'SẮP ĐẤU');
   b.run('stopPublicVideo()');
   assert.equal(b.peers[0].closed,true);
 });
@@ -125,11 +130,15 @@ test('discovery timeout clears the old LIVE button and normal polling recovers',
   let hang=false;
   const f=fixture(),b=browser(f.handler,(url,{signal})=>hang?stalled(signal):undefined);
   b.run(`mountPublicVideo({tournament_id:'${id}',event_id:'${id}'})`);await settle();
-  assert.equal(b.slot.children[0].textContent,'🔴 VIDEO LIVE');
+  assert.equal(b.slot.children[0].textContent,'XEM LIVE');
+  assert.equal(b.liveCount.textContent,' • 🔴 1 LIVE');
+  assert.equal(b.state.textContent,'🔴 ĐANG ĐẤU');
   hang=true;const refresh=b.tick(10000);await settle();b.tick(12000);await refresh;
   assert.equal(b.slot.textContent,'Chưa xác định trạng thái video');
   hang=false;await b.tick(10000);
-  assert.equal(b.slot.children[0].textContent,'🔴 VIDEO LIVE');
+  assert.equal(b.slot.children[0].textContent,'XEM LIVE');
+  assert.equal(b.liveCount.textContent,' • 🔴 1 LIVE');
+  assert.equal(b.state.textContent,'🔴 ĐANG ĐẤU');
   b.run('stopPublicVideo()');
 });
 
@@ -191,7 +200,7 @@ test('homepage cards open the existing WHEP player and disappear when discovery 
  await b.tick(10000);
  assert.equal(b.homeSection.hidden,false);assert.equal(b.homeCards.children.length,2);
  const card=b.homeCards.children[0];
- assert.deepEqual(card.children.map(node=>node.textContent),['● LIVE','Cup','Doubles · A01','Alpha vs Beta','Xem LIVE']);
+ assert.deepEqual(card.children.map(node=>node.textContent),['● LIVE','Cup','Doubles · A01','Alpha vs Beta','XEM LIVE']);
  card.children.at(-1).onclick();await settle();
  assert.equal(b.peers[0].remoteDescription.sdp,'v=0\r\nprovider-answer');
  streams=[];await b.tick(10000);
