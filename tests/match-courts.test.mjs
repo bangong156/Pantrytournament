@@ -71,3 +71,26 @@ test('court dropdown saves changes, removes assignment, and restores value on fa
  assert.equal(saved[0].db,context.db);assert.equal(saved[0].tid,'cup');
  context.profile.role='player';select=null;vm.runInContext("mountCourtSelect(host,match,db,'cup')",context);assert.equal(select,null);
 });
+
+test('group renderer mounts a court selector for every Admin/Staff match independently of LIVE controls',async()=>{
+ for(const role of ['admin','staff','player'])for(const basic of [false,true]){
+  const matches=[{id:'uuid-match',group_id:'g',match_code:'A01',court_number:3,status:'scheduled'},
+   {id:42,group_id:'g',match_code:'A02',court_number:null,status:'playing'}];
+  const hosts=[];const work={set innerHTML(html){
+   this.html=html;hosts.splice(0,hosts.length,...[...html.matchAll(/data-group-court="([^"]+)"/g)].map(m=>({dataset:{groupCourt:m[1]},children:[],append(node){this.children.push(node)}})));
+  }};
+  const db={from(table){const q={select(){return q},eq(){return q},order(){return q},then(resolve){return Promise.resolve({data:table==='matches'?matches:table==='groups'?[{id:'g',name:'A'}]:[]}).then(resolve)}};return q}};
+  const context=vm.createContext({profile:{role},courtOptions,competitionClient:()=>db,supabase:{},activeEvent:{},renderEpoch:0,currentTournament:{name:'Cup',format:basic?'mlp':'doubles'},standingsData:async()=>[],getMlpConfig:async()=>({style:'basic'}),fairMatchOrder:m=>m,esc:s=>String(s??''),startLive(){},document:{querySelector:()=>work,querySelectorAll:selector=>selector==='#workcontent [data-group-court]'?hosts:[],createElement:()=>({setAttribute(){}})}});
+  vm.runInContext(source.slice(source.indexOf('function mountCourtSelect('),source.indexOf('async function standingsData(')),context);
+  await vm.runInContext("renderMatches('cup')",context);
+  assert.equal(hosts.length,2);
+  assert.match(work.html,basic?/data-open-mlp=/:/data-save=/);
+  for(const [i,host] of hosts.entries()){
+   assert.equal(host.children.length,role==='player'?0:1);
+   if(role==='player')continue;
+   const select=host.children[0];assert.equal(select.className,'match-court-select');
+   assert.equal(select.value,i===0?'3':'');assert.match(select.innerHTML,/Chưa xếp sân/);
+   for(let court=1;court<=6;court++)assert.ok(select.innerHTML.includes(`Sân ${court}</option>`));
+  }
+ }
+});

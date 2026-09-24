@@ -296,4 +296,10 @@
 .match-court-select{display:block;width:100%;max-width:150px;margin-top:6px;padding:6px;font-size:12px;min-height:36px}
 .public-court{display:block;font-size:10px;line-height:1.5;white-space:nowrap;color:#527064}
 .bracket-match .match-court-select{display:inline-block;margin-left:8px}
-.call-order>.match-court-select{grid-column:1/-1;min-width:0}
+.call-order>.match-court-select{grid-column:1/-1;grid-row:3;min-width:0}
+
+@media(min-width:901px) and (max-width:960px){
+ .match-control-page .call-order:has(.match-court-select){display:grid;grid-template-columns:31px minmax(0,1fr);grid-column:1/-1;min-width:0}
+ .match-control-page .call-order>.video-enable{grid-column:1/-1;grid-row:2;justify-self:start}
+ .match-control-page .call-order>.match-court-select{grid-column:1/-1;grid-row:3}
+}
