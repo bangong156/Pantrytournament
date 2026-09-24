@@ -4,3 +4,8 @@
 .public-video-player h2{font-size:20px}
 .public-video-player video{display:block;width:100%;aspect-ratio:16/9;max-height:65dvh;background:#111;border-radius:10px}
 .public-video-player p{min-height:2.5em;margin:14px 0}
+.homepage-live-card{display:flex;flex-direction:column;gap:10px;min-width:0;overflow-wrap:anywhere}
+.homepage-live-card h3,.homepage-live-card p{margin:0}
+.homepage-live-card button{margin-top:auto;align-self:flex-start;min-height:44px}
+.homepage-live-indicator{color:#dc2626;font-size:12px;font-weight:800}
+#homepageLive[hidden]{display:none}

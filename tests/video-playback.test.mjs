@@ -61,6 +61,7 @@ function browser(handler,intercept=()=>undefined){
   const panel={querySelector:selector=>nodes[selector],isConnected:true};
   const overlay=makeNode();panel.parentElement=overlay;
   const host={...makeNode(),querySelector:selector=>selector==='.overlay'?overlay:panel};
+  const homeCards=makeNode(),homeSection={hidden:true,querySelector:()=>homeCards};
   const calls=[],peers=[],timers=[];
   class Peer{
     constructor(){peers.push(this);this.transceivers=[];}
@@ -73,7 +74,7 @@ function browser(handler,intercept=()=>undefined){
   const context=vm.createContext({URLSearchParams,URL,AbortController,Map,RTCPeerConnection:Peer,
     MediaStream:class{getTracks(){return [];}addTrack(){}},
     window:{RTCPeerConnection:Peer,addEventListener(){},removeEventListener(){}},
-    document:{querySelectorAll:()=>[slot],querySelector:()=>host,createElement:()=>makeNode()},
+    document:{querySelectorAll:()=>[slot],querySelector:selector=>selector==='#homepageLive'?homeSection:host,createElement:()=>makeNode()},
     setTimeout:(fn,delay)=>{timers.push({fn,delay,active:true});return timers.length;},clearTimeout:id=>{if(timers[id-1])timers[id-1].active=false;},
     fetch:async(url,options={})=>{
       calls.push({url,options});
@@ -87,7 +88,7 @@ function browser(handler,intercept=()=>undefined){
     }
   });
   vm.runInContext(fs.readFileSync(new URL('../video-playback.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/export /g,''),context);
-  return {slot,host,nodes,calls,peers,timers,
+  return {slot,host,nodes,calls,peers,timers,homeCards,homeSection,
     tick:delay=>{const timer=timers.find(t=>t.active&&t.delay===delay);assert.ok(timer,'expected pending timer');timer.active=false;return timer.fn();},
     run:code=>vm.runInContext(code,context)};
 }
@@ -161,4 +162,40 @@ test('closing the viewer aborts a pending WHEP request and does not restart poll
   b.run('stopPublicVideo()');await settle();
   assert.equal(b.peers[0].closed,true);
   assert.equal(b.timers.some(t=>t.active),false);
+});
+
+test('homepage discovery supports multiple matches, filters expiry, and returns only public fields',async()=>{
+ const f=fixture();
+ const second={...f.row,id:other,match_id:other};
+ f.repository.liveRows=async()=>[f.row,second,{...f.row,status:'ready'},{...f.row,lease_expires_at:new Date(0).toISOString()}];
+ f.repository.get=async key=>key===other?second:f.row;
+ f.repository.match=async key=>({id:key,event_id:id,tournament_id:id});
+ f.repository.publicMatchDetails=async()=>({tournament_name:'Cup',event_name:'Doubles',match_code:'A01',team_a:'A',team_b:'B'});
+ const result=await f.handler({httpMethod:'GET',queryStringParameters:{homepage:'1'}});
+ assert.equal(result.statusCode,200);
+ const streams=JSON.parse(result.body).streams;
+ assert.equal(streams.length,2);
+ assert.deepEqual(Object.keys(streams[0]).sort(),['event_id','event_name','match_code','match_id','session_id','team_a','team_b','tournament_id','tournament_name']);
+ f.repository.get=async()=>({...f.row,status:'ended'});
+ assert.deepEqual(JSON.parse((await f.handler({httpMethod:'GET',queryStringParameters:{homepage:'1'}})).body),{streams:[]});
+});
+
+
+test('homepage cards open the existing WHEP player and disappear when discovery empties',async()=>{
+ const f=fixture();let streams=[];
+ const b=browser(f.handler,url=>url.includes('homepage=1')?{ok:true,json:async()=>({streams})}:undefined);
+ b.run('mountHomepageVideo()');await settle();
+ assert.equal(b.homeSection.hidden,true);
+ streams=[{tournament_id:id,event_id:id,match_id:id,tournament_name:'Cup',event_name:'Doubles',match_code:'A01',team_a:'Alpha',team_b:'Beta'},
+ {tournament_id:id,event_id:id,match_id:other,tournament_name:'Cup',event_name:'MLP',match_code:'B01',team_a:'Gamma',team_b:'Delta'}];
+ await b.tick(10000);
+ assert.equal(b.homeSection.hidden,false);assert.equal(b.homeCards.children.length,2);
+ const card=b.homeCards.children[0];
+ assert.deepEqual(card.children.map(node=>node.textContent),['● LIVE','Cup','Doubles · A01','Alpha vs Beta','Xem LIVE']);
+ card.children.at(-1).onclick();await settle();
+ assert.equal(b.peers[0].remoteDescription.sdp,'v=0\r\nprovider-answer');
+ streams=[];await b.tick(10000);
+ assert.equal(b.homeSection.hidden,true);assert.equal(b.homeCards.children.length,0);
+ b.run('stopPublicVideo()');assert.equal(b.peers[0].closed,true);
+ assert.equal(b.timers.some(timer=>timer.active),false);
 });

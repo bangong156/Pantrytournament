@@ -45,6 +45,33 @@ export function mountPublicVideo(scope){
   refresh();
 }
 
+export function mountHomepageVideo(){
+  stopPublicVideo();
+  const section=document.querySelector('#homepageLive'),cards=section.querySelector('.discovery-grid');
+  const controller=new AbortController();let timer,closePlayer=()=>{};
+  dispose=()=>{clearTimeout(timer);controller.abort();closePlayer();};
+  const refresh=async()=>{
+    try{
+      const streams=await readStreams({homepage:'1'},controller.signal);
+      if(controller.signal.aborted)return;
+      cards.replaceChildren();section.hidden=!streams.length;
+      for(const stream of streams){
+        const card=document.createElement('article');card.className='discovery-card homepage-live-card';
+        const add=(tag,text,className)=>{const node=document.createElement(tag);node.textContent=text;if(className)node.className=className;card.append(node);return node;};
+        add('span','● LIVE','homepage-live-indicator');
+        add('h3',stream.tournament_name);
+        add('p',`${stream.event_name} · ${stream.match_code||'Trận đấu'}`);
+        add('strong',`${stream.team_a} vs ${stream.team_b}`);
+        const button=add('button','Xem LIVE');
+        button.onclick=()=>{closePlayer();closePlayer=openPlayer({tournament_id:stream.tournament_id,event_id:stream.event_id,match_id:stream.match_id},stream.match_code,()=>{card.remove();section.hidden=!cards.children.length;});};
+        cards.append(card);
+      }
+    }catch{if(!controller.signal.aborted){cards.replaceChildren();section.hidden=true;}}
+    finally{if(!controller.signal.aborted)timer=setTimeout(refresh,10000);}
+  };
+  refresh();
+}
+
 function openPlayer(scope,label,onOffline){
   const host=document.querySelector('#modal');
   host.innerHTML='<div class="overlay"><section class="modal public-video-player" role="dialog" aria-modal="true" aria-label="Video trực tiếp"><div class="modalhead"><h2></h2><button class="x" aria-label="Đóng">×</button></div><video controls autoplay muted playsinline></video><p role="status" aria-live="polite">Đang kết nối video LIVE…</p><button class="secondary" data-retry>Thử lại</button></section></div>';
