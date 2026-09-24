@@ -195,12 +195,12 @@ test('homepage cards open the existing WHEP player and disappear when discovery 
  const b=browser(f.handler,url=>url.includes('homepage=1')?{ok:true,json:async()=>({streams})}:undefined);
  b.run('mountHomepageVideo()');await settle();
  assert.equal(b.homeSection.hidden,true);
- streams=[{tournament_id:id,event_id:id,match_id:id,tournament_name:'Cup',event_name:'Doubles',match_code:'A01',team_a:'Alpha',team_b:'Beta'},
+ streams=[{tournament_id:id,event_id:id,match_id:id,tournament_name:'Cup',event_name:'Doubles',match_code:'A01',team_a:'Alpha',team_b:'Beta',court_number:3},
  {tournament_id:id,event_id:id,match_id:other,tournament_name:'Cup',event_name:'MLP',match_code:'B01',team_a:'Gamma',team_b:'Delta'}];
  await b.tick(10000);
  assert.equal(b.homeSection.hidden,false);assert.equal(b.homeCards.children.length,2);
  const card=b.homeCards.children[0];
- assert.deepEqual(card.children.map(node=>node.textContent),['● LIVE','Cup','Doubles · A01','Alpha vs Beta','XEM LIVE']);
+ assert.deepEqual(card.children.map(node=>node.textContent),['● LIVE','Cup','Doubles · A01 • SÂN 3','Alpha vs Beta','XEM LIVE']);
  card.children.at(-1).onclick();await settle();
  assert.equal(b.peers[0].remoteDescription.sdp,'v=0\r\nprovider-answer');
  streams=[];await b.tick(10000);

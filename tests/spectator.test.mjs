@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {courtLabel} from '../match-courts.js';
 import {validMatches,nextMatch,summaryText,matchStatus,eventState} from '../spectator.js';
 const teams=[{id:'a'},{id:'b'}];
 const match=(id,status,scheduled_order)=>({id,status,scheduled_order,match_code:id,team1_id:'a',team2_id:'b'});
@@ -22,14 +23,14 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 const source=fs.readFileSync(new URL('../src.js',import.meta.url),'utf8');
 test('public cards render progress and all match stages with spectator labels',()=>{
- const context=vm.createContext({matchStatus,esc:s=>String(s??''),vietnamToday:()=> '2026-09-24',eventCategory:()=> 'live',displayEventDate:s=>s,eventType:()=> 'GIẢI ĐẤU',eventFormat:()=> 'Đánh đôi'});
+ const context=vm.createContext({matchStatus,courtLabel,esc:s=>String(s??''),vietnamToday:()=> '2026-09-24',eventCategory:()=> 'live',displayEventDate:s=>s,eventType:()=> 'GIẢI ĐẤU',eventFormat:()=> 'Đánh đôi'});
  vm.runInContext(source.slice(source.indexOf('function discoveryCard('),source.indexOf('async function publicDashboard(')),context);
  vm.runInContext(source.slice(source.indexOf('function publicTeamButton('),source.indexOf('function refereeClaimModal(')),context);
  const card=vm.runInContext("discoveryCard({id:'t',name:'Cup',start_date:'2026-09-24'},true,'<p>Event A: 2 CẶP</p>')",context);
  assert.match(card,/ĐANG DIỄN RA/);assert.match(card,/Event A: 2 CẶP/);assert.match(card,/XEM GIẢI/);
- context.data={t:{},groups:[{id:'g',name:'A'}],teams,teamMap:{a:'Alpha',b:'Beta'},members:{},matches:[{...match('A01','playing',1),group_id:'g',stage:'group'},{...match('KO01','scheduled',1),stage:'quarterfinal'}]};
+ context.data={t:{},groups:[{id:'g',name:'A'}],teams,teamMap:{a:'Alpha',b:'Beta'},members:{},matches:[{...match('A01','playing',1),court_number:3,group_id:'g',stage:'group'},{...match('KO01','scheduled',1),stage:'quarterfinal'}]};
  const html=vm.runInContext("publicHubContent('matches',data)",context);
- assert.match(html,/🔴 ĐANG ĐẤU/);assert.match(html,/SẮP ĐẤU/);assert.match(html,/KO01/);assert.match(html,/Alpha/);
+ assert.match(html,/🔴 ĐANG ĐẤU/);assert.match(html,/SẮP ĐẤU/);assert.match(html,/KO01/);assert.match(html,/Alpha/);assert.match(html,/SÂN 3/);
 });
 test('public summary queries are event scoped and mobile compact rules exist',()=>{
  const publicView=source.slice(source.indexOf('async function publicTournament('),source.indexOf('function publicTeamButton('));

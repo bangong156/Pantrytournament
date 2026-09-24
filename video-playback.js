@@ -64,7 +64,7 @@ export function mountHomepageVideo(){
         const add=(tag,text,className)=>{const node=document.createElement(tag);node.textContent=text;if(className)node.className=className;card.append(node);return node;};
         add('span','● LIVE','homepage-live-indicator');
         add('h3',stream.tournament_name);
-        add('p',`${stream.event_name} · ${stream.match_code||'Trận đấu'}`);
+        add('p',`${stream.event_name} · ${stream.match_code||'Trận đấu'}${Number.isInteger(stream.court_number)&&stream.court_number>0?' • SÂN '+stream.court_number:''}`);
         add('strong',`${stream.team_a} vs ${stream.team_b}`);
         const button=add('button','XEM LIVE');
         button.onclick=()=>{closePlayer();closePlayer=openPlayer({tournament_id:stream.tournament_id,event_id:stream.event_id,match_id:stream.match_id},stream.match_code,()=>{card.remove();section.hidden=!cards.children.length;});};

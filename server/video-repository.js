@@ -27,14 +27,15 @@ export function videoRepository({url,key}){
     async cas(row,patch){return check(await db.from('match_video_sessions').update({...patch,version:row.version+1}).eq('id',row.id).eq('version',row.version).eq('status',row.status).select().maybeSingle(),'cas');},
     async liveRows(){return check(await db.from('match_video_sessions').select('*').eq('status','live').gt('lease_expires_at',new Date().toISOString()).gt('hard_expires_at',new Date().toISOString()));},
     async publicMatchDetails(match){
-      const [tournament,event,teams]=await Promise.all([
+      const [tournament,event,teams,court]=await Promise.all([
         db.from('tournaments').select('name').eq('id',match.tournament_id).maybeSingle(),
         db.from('tournament_events').select('name').eq('id',match.event_id).eq('tournament_id',match.tournament_id).maybeSingle(),
-        db.from('teams').select('id,name').eq('event_id',match.event_id).in('id',[match.team1_id,match.team2_id].filter(Boolean))
+        db.from('teams').select('id,name').eq('event_id',match.event_id).in('id',[match.team1_id,match.team2_id].filter(Boolean)),
+        db.from('matches').select('court_number').eq('id',match.id).eq('event_id',match.event_id).eq('tournament_id',match.tournament_id).maybeSingle()
       ]);
       const t=check(tournament),e=check(event),names=check(teams)||[];
       if(!t||!e)return null;
-      return {tournament_name:t.name,event_name:e.name,match_code:match.match_code,
+      return {tournament_name:t.name,event_name:e.name,match_code:match.match_code,court_number:check(court)?.court_number??null,
         team_a:names.find(team=>team.id===match.team1_id)?.name||'TBD',team_b:names.find(team=>team.id===match.team2_id)?.name||'TBD'};
     },
     async eventRows(id){return check(await db.from('match_video_sessions').select('*').eq('event_id',id).neq('status','ended').limit(100));},
