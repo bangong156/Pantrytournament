@@ -113,7 +113,7 @@ test('public card opens the match-specific inline player through Cloudflare WHEP
   await b.tick(10000);
   assert.equal(b.slot.children.length,0);
   assert.equal(b.slot.textContent,'');
-  assert.equal(b.liveCount.textContent,' • 🔴 0 LIVE');
+  assert.equal(b.liveCount.textContent,' • 0 LIVE');
   assert.equal(b.state.textContent,'SẮP ĐẤU');
   b.run('stopPublicVideo()');
   assert.equal(b.peers[0].closed,true);

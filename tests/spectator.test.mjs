@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {validMatches,nextMatch,summaryText,matchStatus} from '../spectator.js';
+import {validMatches,nextMatch,summaryText,matchStatus,eventState} from '../spectator.js';
 const teams=[{id:'a'},{id:'b'}];
 const match=(id,status,scheduled_order)=>({id,status,scheduled_order,match_code:id,team1_id:'a',team2_id:'b'});
 test('counts include valid completed and knockout matches, exclude missing teams and invalid states',()=>{
@@ -40,4 +40,29 @@ test('public summary queries are event scoped and mobile compact rules exist',()
  const css=fs.readFileSync(new URL('../style.css',import.meta.url),'utf8');
  assert.match(css,/@media\(max-width:600px\)\{.spectator-summary/);
  assert.match(css,/grid-template-columns:1fr auto 1fr/);
+});
+
+
+test('derived event state handles complete, playing, waiting, and empty events',()=>{
+ assert.equal(eventState([match('A01','completed',1)]),'✓ ĐÃ HOÀN THÀNH');
+ assert.equal(eventState([match('A01','completed',1),match('A02','playing',2)]),'🟢 ĐANG DIỄN RA');
+ assert.equal(eventState([match('A01','completed',1),match('A02','scheduled',2)]),'');
+ assert.equal(eventState([]),'');
+});
+test('overview keeps player stats without repeating the tournament hero',()=>{
+ const context=vm.createContext({esc:s=>String(s??'')});
+ vm.runInContext(source.slice(source.indexOf('function publicHubContent('),source.indexOf('function refereeClaimModal(')),context);
+ context.data={t:{name:'Duplicate tournament',start_date:'2026-09-24'},groups:[],teams:[],matches:[],members:{},registeredPlayers:16};
+ const html=vm.runInContext("publicHubContent('overview',data)",context);
+ assert.match(html,/<strong>16<\/strong><span>VĐV/);
+ assert.doesNotMatch(html,/Duplicate tournament|24\/09\/2026|<h2|public-hub-kicker/);
+});
+test('single-event public view hides event navigation and context',()=>{
+ const context=vm.createContext({tournamentEvents:[{id:'one'}],activeEvent:{id:'one'},esc:s=>s});
+ vm.runInContext(source.slice(source.indexOf('function publicEventSelector('),source.indexOf('function competitionEventCards(')),context);
+ assert.equal(vm.runInContext('publicEventSelector()',context),'');
+ context.tournamentEvents.push({id:'two',name:'Event Two'});
+ assert.match(vm.runInContext('publicEventSelector()',context),/Event Two/);
+ const publicView=source.slice(source.indexOf('async function publicTournament('),source.indexOf('function publicTeamButton('));
+ assert.match(publicView,/tournamentEvents.length>1\?`<div class="event-context">/);
 });

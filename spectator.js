@@ -12,3 +12,8 @@ export function matchStatus(match) {
 export function summaryText(teams,groups,matches,format) {
   return `${teams.length} ${format==='mlp'?'ĐỘI':'CẶP'} • ${groups.length} BẢNG • ${matches.filter(m=>m.status==='completed').length}/${matches.length} TRẬN`;
 }
+
+export function eventState(matches) {
+  if(matches.length && matches.every(m=>m.status==='completed'))return '✓ ĐÃ HOÀN THÀNH';
+  return matches.some(m=>m.status==='playing')?'🟢 ĐANG DIỄN RA':'';
+}

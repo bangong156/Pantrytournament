@@ -32,7 +32,7 @@ export function mountPublicVideo(scope,onStreams=()=>{}){
       const active=new Map(streams.map(row=>[row.match_id,row]));
       onStreams(streams);
       const count=document.querySelector('[data-live-count]');
-      if(count)count.textContent=` • 🔴 ${active.size} LIVE`;
+      if(count)count.textContent=` • ${active.size>0?'🔴 ':''}${active.size} LIVE`;
       document.querySelectorAll('[data-match-state]').forEach(node=>{node.textContent=active.has(node.dataset.matchState)?'🔴 ĐANG ĐẤU':node.dataset.baseStatus;});
       for(const slot of slots){
         slot.replaceChildren();
