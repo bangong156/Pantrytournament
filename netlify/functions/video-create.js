@@ -48,6 +48,24 @@ export function createHandler(getDependencies=dependencies){
       operation='database';
       await repository.rate(`video-create:${userId}`,10);
       const match=await requireVideoMatch(repository,payload?.match_id);
+      const previous=await repository.activeMatch(match.id);
+      if(previous){
+        const expiry=previous.status==='ready'?previous.invite_expires_at:
+          ['connecting','live'].includes(previous.status)?previous.lease_expires_at:previous.cleanup_after;
+        if(!(Date.parse(expiry)<=Date.now()||Date.parse(previous.hard_expires_at)<=Date.now())){
+          throw new VideoError(409,'Trận này đã có phiên LIVE. Hãy kết thúc phiên cũ trước.');
+        }
+        // Claim the exact version before deleting its input: a concurrent
+        // heartbeat or startup must never lose its renewed session.
+        const stopping=await repository.cas(previous,{status:'stopping',cleanup_after:new Date().toISOString()});
+        if(!stopping)throw new VideoError(409,'Phiên LIVE đã thay đổi. Vui lòng thử lại.');
+        if(stopping.input_uid){operation='Cloudflare';await stream.remove(stopping.input_uid);}
+        operation='database';
+        // Retain the unique slot if provider deletion or finalization fails.
+        if(!await repository.cas(stopping,{status:'ended',ended_at:new Date().toISOString(),credentials_ciphertext:null,playback_url:null})){
+          throw new VideoError(409,'Phiên LIVE đã thay đổi. Vui lòng thử lại.');
+        }
+      }
       const now=Date.now(),invite=capability();
       const row=await repository.insert({
         id:randomUUID(),match_id:match.id,event_id:match.event_id,tournament_id:match.tournament_id,

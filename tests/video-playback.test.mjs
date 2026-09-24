@@ -53,7 +53,7 @@ test('rechecks stop, expiry, input replacement and match ownership before exposi
 });
 
 // Run the real browser module with a small DOM/WebRTC harness, without a camera or network.
-function browser(handler){
+function browser(handler,intercept=()=>undefined){
   const makeNode=()=>({children:[],textContent:'',append(child){this.children.push(child);},replaceChildren(){this.children=[];this.textContent='';}});
   const slot={...makeNode(),dataset:{publicVideo:id,videoLabel:'A01'}};
   const video={srcObject:null,play:async()=>{}};
@@ -74,9 +74,10 @@ function browser(handler){
     MediaStream:class{getTracks(){return [];}addTrack(){}},
     window:{RTCPeerConnection:Peer,addEventListener(){},removeEventListener(){}},
     document:{querySelectorAll:()=>[slot],querySelector:()=>host,createElement:()=>makeNode()},
-    setTimeout:fn=>{timers.push(fn);return timers.length;},clearTimeout(){},
+    setTimeout:(fn,delay)=>{timers.push({fn,delay,active:true});return timers.length;},clearTimeout:id=>{if(timers[id-1])timers[id-1].active=false;},
     fetch:async(url,options={})=>{
       calls.push({url,options});
+      const intercepted=intercept(url,options);if(intercepted!==undefined)return intercepted;
       if(url.startsWith('/.netlify/functions/video-playback?')){
         const response=await handler({httpMethod:'GET',queryStringParameters:Object.fromEntries(new URL(url,'https://pantry.test').searchParams)});
         return {ok:response.statusCode===200,json:async()=>JSON.parse(response.body)};
@@ -86,7 +87,9 @@ function browser(handler){
     }
   });
   vm.runInContext(fs.readFileSync(new URL('../video-playback.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/export /g,''),context);
-  return {slot,host,nodes,calls,peers,timers,run:code=>vm.runInContext(code,context)};
+  return {slot,host,nodes,calls,peers,timers,
+    tick:delay=>{const timer=timers.find(t=>t.active&&t.delay===delay);assert.ok(timer,'expected pending timer');timer.active=false;return timer.fn();},
+    run:code=>vm.runInContext(code,context)};
 }
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 
@@ -103,9 +106,59 @@ test('public card opens the match-specific inline player through Cloudflare WHEP
   assert.equal(whep.options.headers['Content-Type'],'application/sdp');
   assert.equal(b.peers[0].remoteDescription.sdp,'v=0\r\nprovider-answer');
   f.row.status='ended';
-  await b.timers[0]();
+  await b.tick(10000);
   assert.equal(b.slot.children.length,0);
   assert.equal(b.slot.textContent,'Video ngoại tuyến / đã kết thúc');
   b.run('stopPublicVideo()');
   assert.equal(b.peers[0].closed,true);
+});
+
+function stalled(signal){
+  return new Promise((resolve,reject)=>{
+    if(signal.aborted)reject(new Error('Request aborted'));
+    else signal.addEventListener('abort',()=>reject(new Error('Request aborted')),{once:true});
+  });
+}
+
+test('discovery timeout clears the old LIVE button and normal polling recovers',async()=>{
+  let hang=false;
+  const f=fixture(),b=browser(f.handler,(url,{signal})=>hang?stalled(signal):undefined);
+  b.run(`mountPublicVideo({tournament_id:'${id}',event_id:'${id}'})`);await settle();
+  assert.equal(b.slot.children[0].textContent,'🔴 VIDEO LIVE');
+  hang=true;const refresh=b.tick(10000);await settle();b.tick(12000);await refresh;
+  assert.equal(b.slot.textContent,'Chưa xác định trạng thái video');
+  hang=false;await b.tick(10000);
+  assert.equal(b.slot.children[0].textContent,'🔴 VIDEO LIVE');
+  b.run('stopPublicVideo()');
+});
+
+test('WHEP header and body timeouts release the player and enable retry',async()=>{
+  for(const phase of ['headers','body']){
+    let hang=true;
+    const f=fixture(),b=browser(f.handler,(url,{signal})=>{
+      if(url!==playback||!hang)return;
+      if(phase==='headers')return stalled(signal);
+      return {status:201,headers:{get:()=>null},text:()=>stalled(signal)};
+    });
+    b.run(`mountPublicVideo({tournament_id:'${id}',event_id:'${id}'})`);await settle();
+    b.slot.children[0].onclick();await settle();
+    assert.equal(b.nodes['[data-retry]'].disabled,true);
+    b.tick(12000);await settle();
+    assert.equal(b.peers[0].closed,true);
+    assert.equal(b.nodes.video.srcObject,null);
+    assert.equal(b.nodes['[data-retry]'].disabled,false);
+    hang=false;b.nodes['[data-retry]'].onclick();await settle();
+    assert.equal(b.peers[1].remoteDescription.sdp,'v=0\r\nprovider-answer');
+    assert.equal(b.nodes['[data-retry]'].disabled,false);
+    b.run('stopPublicVideo()');
+  }
+});
+
+test('closing the viewer aborts a pending WHEP request and does not restart polling',async()=>{
+  const f=fixture(),b=browser(f.handler,(url,{signal})=>url===playback?stalled(signal):undefined);
+  b.run(`mountPublicVideo({tournament_id:'${id}',event_id:'${id}'})`);await settle();
+  b.slot.children[0].onclick();await settle();
+  b.run('stopPublicVideo()');await settle();
+  assert.equal(b.peers[0].closed,true);
+  assert.equal(b.timers.some(t=>t.active),false);
 });

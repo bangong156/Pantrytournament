@@ -22,6 +22,7 @@ export function videoRepository({url,key}){
     async rate(key,limit){if(!check(await db.rpc('match_video_take_rate',{p_key:digest(key),p_limit:limit}),'rate'))throw new VideoError(429,'Quá nhiều yêu cầu. Vui lòng đợi một phút.');},
     async match(id){return check(await db.from('matches').select('id,event_id,tournament_id,match_code').eq('id',id).maybeSingle(),'match');},
     async get(id){return check(await db.from('match_video_sessions').select('*').eq('id',id).maybeSingle(),'cleanup');},
+    async activeMatch(id){return check(await db.from('match_video_sessions').select('*').eq('match_id',id).neq('status','ended').maybeSingle(),'cleanup');},
     async insert(row){return check(await db.from('match_video_sessions').insert(row).select().single(),'insert');},
     async cas(row,patch){return check(await db.from('match_video_sessions').update({...patch,version:row.version+1}).eq('id',row.id).eq('version',row.version).eq('status',row.status).select().maybeSingle(),'cas');},
     async eventRows(id){return check(await db.from('match_video_sessions').select('*').eq('event_id',id).neq('status','ended').limit(100));},

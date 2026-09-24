@@ -3,11 +3,21 @@ import './video-playback.css';
 let dispose=()=>{};
 export function stopPublicVideo(){dispose();dispose=()=>{};}
 
+async function requestWithTimeout(url,options,consume){
+  const controller=new AbortController(),parent=options.signal;
+  const abort=()=>controller.abort();
+  if(parent?.aborted)abort();else parent?.addEventListener('abort',abort,{once:true});
+  const timer=setTimeout(abort,12000);
+  try{return await consume(await fetch(url,{...options,signal:controller.signal}));}
+  finally{clearTimeout(timer);parent?.removeEventListener('abort',abort);}
+}
+
 async function readStreams(scope,signal){
-  const response=await fetch('/.netlify/functions/video-playback?'+new URLSearchParams(scope),{cache:'no-store',signal});
-  const result=await response.json();
-  if(!response.ok)throw new Error(result.error||'Không thể tải video LIVE.');
-  return result.streams;
+  return requestWithTimeout('/.netlify/functions/video-playback?'+new URLSearchParams(scope),{cache:'no-store',signal},async response=>{
+    const result=await response.json();
+    if(!response.ok)throw new Error(result.error||'Không thể tải video LIVE.');
+    return result.streams;
+  });
 }
 
 export function mountPublicVideo(scope){
@@ -70,11 +80,12 @@ function openPlayer(scope,label,onOffline){
       };
       await connection.setLocalDescription(await connection.createOffer());
       // WHEP accepts the initial offer without client-side ICE trickling.
-      const response=await fetch(stream.playback_url,{method:'POST',headers:{'Content-Type':'application/sdp'},body:connection.localDescription.sdp,signal:controller.signal});
-      if(response.status!==201)throw new Error('Video ngoại tuyến hoặc kết nối bị gián đoạn. Vui lòng thử lại.');
-      const location=response.headers.get('Location');
-      if(location){const url=new URL(location,stream.playback_url);if(url.origin===new URL(stream.playback_url).origin)viewerURL=url.href;}
-      const answer=await response.text();
+      const answer=await requestWithTimeout(stream.playback_url,{method:'POST',headers:{'Content-Type':'application/sdp'},body:connection.localDescription.sdp,signal:controller.signal},async response=>{
+        if(response.status!==201)throw new Error('Video ngoại tuyến hoặc kết nối bị gián đoạn. Vui lòng thử lại.');
+        const location=response.headers.get('Location');
+        if(location){const url=new URL(location,stream.playback_url);if(url.origin===new URL(stream.playback_url).origin)viewerURL=url.href;}
+        return response.text();
+      });
       if(closed)return;
       await connection.setRemoteDescription({type:'answer',sdp:answer});
     }catch(error){if(!closed){release();message.textContent=error instanceof SyntaxError?'Không thể tải video LIVE lúc này.':error.message;}}
