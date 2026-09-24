@@ -268,3 +268,14 @@
   .match-control-page .match-card .score-box,.match-control-page .match-card .series-result{justify-content:flex-start}
   .match-control-page .match-card .save-score,.match-control-page .match-card .open-mlp{min-height:44px}
 }
+
+/* Desktop: reserve a LIVE column beside the compact order/code stack. */
+@media(min-width:961px){
+  .match-control-page .group-matches:has(.video-enable) :is(.match-card,.match-list-head){grid-template-columns:136px minmax(0,1fr) 150px 108px}
+  .match-control-page .match-card .call-order:has(.video-enable){display:grid;grid-template-columns:48px 80px;gap:4px 8px;min-width:0}
+  .match-control-page .call-order:has(.video-enable)>span{grid-column:1;grid-row:1}
+  .match-control-page .call-order:has(.video-enable)>small{grid-column:1;grid-row:2;overflow-wrap:anywhere}
+  .match-control-page .call-order>.video-enable{grid-column:2;grid-row:1/3;width:100%;min-width:0;margin:0;padding:8px 6px;font-size:12px;white-space:nowrap}
+  .match-control-page .match-card:has(.video-enable) .versus{min-width:0;grid-template-columns:minmax(0,1fr) 30px minmax(0,1fr)}
+  .match-control-page .match-card:has(.video-enable) .team-name{min-width:0;overflow-wrap:anywhere}
+}
