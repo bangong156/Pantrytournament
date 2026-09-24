@@ -1,3 +1,4 @@
+import { linkedTournament, shareTournament } from './public-links.js'
 import { mountPublicVideo, stopPublicVideo } from './video-playback.js'
 import { parseRosterRows } from './roster-import.js'
 import { competitionClient } from './event-scope.js'
@@ -51,7 +52,7 @@ async function getOrCreatePlayer(fullName, gender=null){
   if(error) throw error;
   return data;
 }
-async function boot(){if(new URLSearchParams(location.search).has('broadcaster')){const {renderBroadcaster}=await import('./video-ui.js');return renderBroadcaster(app)}({data:{session}}=await supabase.auth.getSession()); if(session){const {data}=await supabase.from('profiles').select('*').eq('id',session.user.id).single();profile=data;return render()}if(await restoreRefereeSession())return;render()}
+async function boot(){if(new URLSearchParams(location.search).has('broadcaster')){const {renderBroadcaster}=await import('./video-ui.js');return renderBroadcaster(app)}const linked=linkedTournament(location.search);if(linked)return publicTournament(linked);({data:{session}}=await supabase.auth.getSession()); if(session){const {data}=await supabase.from('profiles').select('*').eq('id',session.user.id).single();profile=data;return render()}if(await restoreRefereeSession())return;render()}
 function render(){if(!session)return publicDashboard(); dashboard()}
 
 const vietnamToday=()=>{const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(p=>[p.type,p.value]));return `${parts.year}-${parts.month}-${parts.day}`};
@@ -96,9 +97,10 @@ async function publicTournamentInfo(tid){
  if(error||!t)return publicDashboard();
  const image=posterUrl(t.id,info?.poster_path),registrationUrl=registrationLink(info?.registration_url);
  const section=(title,value)=>value?.trim()?`<section class="event-info-section"><h2>${title}</h2><p>${esc(value)}</p></section>`:'';
- app.innerHTML=`<header class="public-header public-home-header"><div class="pantry-header-brand">${pantryLogoMarkup('pantry-logo-public')}<span>Tournament</span></div><button class="ghost" id="infoBack">← Danh sách giải</button></header><main class="wrap event-info-page"><div class="event-info-hero">${image?`<div class="event-poster"><img src="${esc(image)}" alt="Poster ${esc(t.name)}" loading="eager"></div>`:''}<div class="event-info-identity"><small>${eventType(t)} · ${eventFormat(t)}</small><h1>${esc(t.name)}</h1><p>${esc(displayEventDate(t.start_date))}${t.start_time?' • '+esc(t.start_time.slice(0,5)):''}</p><div class="event-info-actions">${registrationUrl?`<a class="event-register" href="${esc(registrationUrl)}" target="_blank" rel="noopener noreferrer">ĐĂNG KÝ NGAY →</a>`:''}<button class="secondary" id="infoToHub">XEM CHI TIẾT THI ĐẤU →</button></div></div></div>${section('THÔNG TIN GIẢI',info?.content)}${section('GIẢI THƯỞNG',info?.prize_information)}${section('QUY ĐỊNH',info?.rules)}</main>`;
+ app.innerHTML=`<header class="public-header public-home-header"><div class="pantry-header-brand">${pantryLogoMarkup('pantry-logo-public')}<span>Tournament</span></div><button class="ghost" id="infoBack">← Danh sách giải</button></header><main class="wrap event-info-page"><div class="event-info-hero">${image?`<div class="event-poster"><img src="${esc(image)}" alt="Poster ${esc(t.name)}" loading="eager"></div>`:''}<div class="event-info-identity"><small>${eventType(t)} · ${eventFormat(t)}</small><h1>${esc(t.name)}</h1><p>${esc(displayEventDate(t.start_date))}${t.start_time?' • '+esc(t.start_time.slice(0,5)):''}</p><div class="event-info-actions">${registrationUrl?`<a class="event-register" href="${esc(registrationUrl)}" target="_blank" rel="noopener noreferrer">ĐĂNG KÝ NGAY →</a>`:''}<button class="secondary" id="infoToHub">XEM CHI TIẾT THI ĐẤU →</button><button id="infoShare">CHIA SẺ GIẢI</button><span id="infoShareFeedback" role="status" aria-live="polite"></span></div></div></div>${section('THÔNG TIN GIẢI',info?.content)}${section('GIẢI THƯỞNG',info?.prize_information)}${section('QUY ĐỊNH',info?.rules)}</main>`;
  const poster=app.querySelector('.event-poster img');if(poster)poster.onerror=()=>poster.parentElement.remove();
  document.querySelector('#infoBack').onclick=()=>publicDashboard();document.querySelector('#infoToHub').onclick=()=>publicTournament(tid);
+ document.querySelector('#infoShare').onclick=async()=>{const feedback=document.querySelector('#infoShareFeedback');try{feedback.textContent=await shareTournament(t.id,t.name)}catch{feedback.textContent='Không thể chia sẻ liên kết. Vui lòng thử lại.'}};
 }
 async function publicTournament(tid,tab='overview',eventId=null){
  stopLive();const epoch=++renderEpoch;
