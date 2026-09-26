@@ -64,3 +64,29 @@ test('shared links restore info without authentication; plain tournament links r
   assert.deepEqual(opened,[info?'info':'competition',id]);
  }
 });
+
+import {publicRoute,competitionURL,matchURL,teamURL,shareMatch,shareTeam} from '../public-links.js';
+const event='22222222-2222-4222-8222-222222222222',match='33333333-3333-4333-8333-333333333333';
+test('competition, match, and journey URLs retain event scope and omit info state',()=>{
+ assert.equal(competitionURL(id,event),`https://pantry.test/?tournament=${id}&event=${event}`);
+ assert.equal(matchURL(id,event,match),`https://pantry.test/?tournament=${id}&event=${event}&match=${match}`);
+ assert.equal(teamURL(id,event,match),`https://pantry.test/?tournament=${id}&event=${event}&team=${match}`);
+ const route=publicRoute(new URL(matchURL(id,event,match)).search);
+ assert.equal(route.event,event);assert.equal(route.match,match);assert.equal(route.invalid,false);
+ assert.equal(publicRoute(`?tournament=${id}&match=${match}`).invalid,true);
+ assert.equal(publicRoute(`?tournament=${id}&event=bad&match=${match}`).invalid,true);
+ assert.equal(publicRoute(`?tournament=${id}&event=${event}&match=${match}&team=${id}`).invalid,true);
+ assert.equal(publicRoute(new URL(tournamentURL(id)).search).info,true);
+});
+test('match and journey sharing support Web Share, clipboard fallback, cancellation, and failure',async()=>{
+ for(const [share,url,message] of [[shareMatch,matchURL,'Đã sao chép link trận'],[shareTeam,teamURL,'Đã sao chép link hành trình']]){
+  let shared,copied;
+  Object.defineProperty(globalThis,'navigator',{configurable:true,value:{share:async data=>{shared=data},clipboard:{writeText:async text=>{copied=text}}}});
+  assert.equal(await share(id,event,match,'Cup'),'Đã chia sẻ');assert.equal(shared.url,url(id,event,match));assert.equal(copied,undefined);
+  delete navigator.share;assert.equal(await share(id,event,match,'Cup'),message);assert.equal(copied,url(id,event,match));
+  copied=undefined;navigator.share=async()=>{throw Object.assign(Error(),{name:'AbortError'})};
+  assert.equal(await share(id,event,match,'Cup'),'');assert.equal(copied,undefined);
+  navigator.share=async()=>{throw Error('unsupported')};assert.equal(await share(id,event,match,'Cup'),message);
+  navigator.clipboard.writeText=async()=>{throw Error('denied')};await assert.rejects(share(id,event,match,'Cup'),/denied/);
+ }
+});

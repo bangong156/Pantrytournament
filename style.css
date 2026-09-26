@@ -303,3 +303,27 @@
  .match-control-page .call-order>.video-enable{grid-column:1/-1;grid-row:2;justify-self:start}
  .match-control-page .call-order>.match-court-select{grid-column:1/-1;grid-row:3}
 }
+
+/* Public match links and event-specific team journeys. */
+.public-match-link{padding:0;background:transparent;color:inherit;font:inherit;text-decoration:underline;text-underline-offset:3px}
+.public-match-actions{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.public-match-actions button{padding:7px 10px;font-size:11px;min-height:36px}
+.public-match-actions [data-share-feedback]{font-size:12px;color:#527064}
+.spectator-detail{max-width:760px;padding-top:24px}
+.spectator-detail-heading{display:block;height:auto;padding:0 0 14px;background:transparent;border-bottom:1px solid #dedbd1}
+.spectator-detail-heading p{margin:4px 0;overflow-wrap:anywhere}
+.spectator-detail-heading p:first-child{font-weight:800}.spectator-detail-heading p:last-child{font-size:13px;color:#777268}
+.spectator-detail h1{font-size:clamp(24px,5vw,34px);overflow-wrap:anywhere;margin:18px 0}
+.spectator-match-detail{text-align:center;padding:0 0 16px}
+.spectator-detail-teams{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;font-size:20px}
+.spectator-detail-teams>div{min-width:0;overflow-wrap:anywhere}.spectator-detail-teams small{display:block;font-size:12px;margin-top:6px}
+.spectator-detail .public-hub-team-link{color:inherit;text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}
+.spectator-detail-score{display:block;font-size:42px;font-variant-numeric:tabular-nums;margin:16px 0 8px}
+.spectator-winner{color:#42632e}.spectator-detail-court{font-size:13px;font-weight:800}
+.spectator-detail-live .public-video-button{width:100%;max-width:300px;min-height:44px;margin:0 0 16px}
+.spectator-detail-live .public-video-button::before{content:'🔴 '}
+.spectator-back{display:inline-block;margin-top:20px;padding:10px 0;color:#35402b;font-size:13px;font-weight:800}
+.spectator-journey-stage{margin-top:24px}.spectator-journey-stage h2{font-size:14px;letter-spacing:.06em}
+.spectator-journey-row{display:grid;grid-template-columns:110px 60px 70px minmax(0,1fr);gap:8px;align-items:center;padding:12px 0;border-bottom:1px solid #dedbd1;font-size:14px}
+.spectator-journey-row>*{min-width:0;overflow-wrap:anywhere}.spectator-journey-row>a{color:#35402b}.spectator-journey-row>small{grid-column:4;color:#527064}
+@media(max-width:600px){.spectator-detail{padding:18px 16px}.spectator-detail-teams{gap:8px;font-size:17px}.spectator-journey-row{grid-template-columns:minmax(0,1fr) auto auto;font-size:13px}.spectator-journey-row>div{grid-column:1/-1}.spectator-journey-row>small{grid-column:1/-1}.spectator-detail button{min-height:44px}}

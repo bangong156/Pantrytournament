@@ -1,6 +1,7 @@
 import { courtLabel, courtOptions, assignCourt, courtConflictMessage } from './match-courts.js'
 import { validMatches, nextMatch, matchStatus, summaryText, eventState } from './spectator.js'
-import { linkedTournament, shareTournament } from './public-links.js'
+import { linkedTournament, shareTournament, publicRoute, competitionURL, matchURL, teamURL, shareMatch, shareTeam } from './public-links.js'
+import { spectatorDetail, loadSpectatorDetail } from './spectator-detail.js'
 import { mountHomepageVideo, mountPublicVideo, stopPublicVideo } from './video-playback.js'
 import { parseRosterRows } from './roster-import.js'
 import { competitionClient } from './event-scope.js'
@@ -54,7 +55,7 @@ async function getOrCreatePlayer(fullName, gender=null){
   if(error) throw error;
   return data;
 }
-async function boot(){if(new URLSearchParams(location.search).has('broadcaster')){const {renderBroadcaster}=await import('./video-ui.js');return renderBroadcaster(app)}const linked=linkedTournament(location.search);if(linked)return new URLSearchParams(location.search).get('view')==='info'?publicTournamentInfo(linked):publicTournament(linked);({data:{session}}=await supabase.auth.getSession()); if(session){const {data}=await supabase.from('profiles').select('*').eq('id',session.user.id).single();profile=data;return render()}if(await restoreRefereeSession())return;render()}
+async function boot(){if(new URLSearchParams(location.search).has('broadcaster')){const {renderBroadcaster}=await import('./video-ui.js');return renderBroadcaster(app)}const linked=linkedTournament(location.search);if(linked){const params=new URLSearchParams(location.search);if(['event','match','team'].some(key=>params.has(key)))return openPublicLink(location.search);return params.get('view')==='info'?publicTournamentInfo(linked):publicTournament(linked);}({data:{session}}=await supabase.auth.getSession()); if(session){const {data}=await supabase.from('profiles').select('*').eq('id',session.user.id).single();profile=data;return render()}if(await restoreRefereeSession())return;render()}
 function render(){if(!session)return publicDashboard(); dashboard()}
 
 const vietnamToday=()=>{const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(p=>[p.type,p.value]));return `${parts.year}-${parts.month}-${parts.day}`};
@@ -118,12 +119,14 @@ async function publicTournamentInfo(tid){
  document.querySelector('#infoBack').onclick=()=>publicDashboard();document.querySelector('#infoToHub').onclick=()=>publicTournament(tid);
  document.querySelector('#infoShare').onclick=async()=>{const feedback=document.querySelector('#infoShareFeedback');try{feedback.textContent=await shareTournament(t.id,t.name)}catch{feedback.textContent='Không thể chia sẻ liên kết. Vui lòng thử lại.'}};
 }
-async function publicTournament(tid,tab='overview',eventId=null){
+async function publicTournament(tid,tab='overview',eventId=null,detail=null){
  stopLive();const epoch=++renderEpoch;
  const {data:tournament}=await supabase.from('tournaments').select('*').eq('id',tid).single();
  if(epoch!==renderEpoch)return;if(!tournament)return publicDashboard();
- if(typeof history!=='undefined')history.replaceState(null,'','?tournament='+encodeURIComponent(tid));
  if(!await loadCompetitionEvents(tournament,eventId,epoch))return;
+ if(eventId&&activeEvent.id!==eventId)return publicLinkError(tid);
+ if(detail)return renderPublicDetail(tournament,{...activeEvent},detail,epoch);
+ if(typeof history!=='undefined')history.replaceState(null,'',competitionURL(tid,activeEvent.id));
  const db=competitionClient(supabase,activeEvent);
  const [{data:t},{data:groups,error:groupsError},{data:teams,error:teamsError},{data:matches,error:matchesError},standings,{data:awards},{data:roster,error:rosterError}]=await Promise.all([
   Promise.resolve({data:{...tournament,format:activeEvent.format}}),
@@ -151,9 +154,10 @@ async function publicTournament(tid,tab='overview',eventId=null){
  document.querySelector('#shareTournament').onclick=async()=>{const feedback=document.querySelector('#shareFeedback');try{feedback.textContent=await shareTournament(tid,tournament.name)}catch{feedback.textContent='Không thể chia sẻ liên kết. Vui lòng thử lại.'}};
  document.querySelectorAll('[data-public-event]').forEach(b=>b.onclick=()=>publicTournament(tid,tab,b.dataset.publicEvent));
  document.querySelector('#beReferee').onclick=async()=>{let saved;try{saved=JSON.parse(localStorage.getItem(`pantry_ref_${tid}`)||'null')}catch{}if(saved?.session_token){try{const row=await validRefereeSession(tid,saved.session_token);if(row){const {data:group}=await supabase.from('groups').select('event_id').eq('id',row.group_id).single();if(group?.event_id===db.event.id)return refereeConsole(tid,row.session_token,row);return refereeClaimModal(t,groups||[])}}catch(error){console.error('Referee session check:',error);return alert('Không thể kiểm tra phiên trọng tài. Thử lại sau.')}}clearRefereeSession(tid);refereeClaimModal(t,groups||[])};
- document.querySelectorAll('[data-public-tab]').forEach(button=>button.onclick=()=>button.dataset.publicTab==='info'?publicTournamentInfo(tid):publicTournament(tid,button.dataset.publicTab));
- document.querySelectorAll('[data-public-team]').forEach(button=>button.onclick=()=>publicTeamDetail(button.dataset.publicTeam,context));
- if(['overview','matches','standings'].includes(tab))startLive(`public:${tid}:${tab}`,()=>publicTournament(tid,tab));
+ document.querySelectorAll('[data-public-tab]').forEach(button=>button.onclick=()=>button.dataset.publicTab==='info'?publicTournamentInfo(tid):publicTournament(tid,button.dataset.publicTab,db.event.id));
+ document.querySelectorAll('[data-public-team]').forEach(button=>button.onclick=()=>publicTournament(tid,'teams',db.event.id,{team:button.dataset.publicTeam}));
+ bindPublicMatchActions(tid,db.event.id,tournament.name);
+ if(['overview','matches','standings'].includes(tab))startLive(`public:${tid}:${tab}`,()=>publicTournament(tid,tab,db.event.id));
   const renderNext=(streams=[])=>{
   const host=document.querySelector('#spectatorNext');if(!host)return;
   const next=nextMatch(context.matches,new Set(streams.map(s=>s.match_id)));
@@ -161,6 +165,36 @@ async function publicTournament(tid,tab='overview',eventId=null){
  };
  renderNext();
  mountPublicVideo({tournament_id:tid,event_id:db.event.id},renderNext);
+}
+function publicLinkError(tid){
+ app.innerHTML=`<main class="wrap spectator-detail"><h1>Không tìm thấy nội dung</h1><p>Liên kết trận hoặc đội cần đúng nội dung thi đấu.</p><a href="${esc(competitionURL(tid))}">← XEM TOÀN BỘ GIẢI</a></main>`;
+}
+async function openPublicLink(search){
+ const route=publicRoute(search);
+ if(route.invalid)return publicLinkError(route.tournament);
+ if(route.match||route.team)return publicTournament(route.tournament,'matches',route.event,{match:route.match,team:route.team});
+ return route.info?publicTournamentInfo(route.tournament):publicTournament(route.tournament,'overview',route.event);
+}
+function bindPublicMatchActions(tid,eventId,title){
+ document.querySelectorAll('[data-open-match]').forEach(button=>button.onclick=()=>publicTournament(tid,'matches',eventId,{match:button.dataset.openMatch}));
+ document.querySelectorAll('[data-share-match],[data-share-team]').forEach(button=>button.onclick=async()=>{
+  const feedback=button.closest('article')?.querySelector('[data-share-feedback]')||document.querySelector('[data-share-feedback]');
+  try{const result=button.dataset.shareMatch?await shareMatch(tid,eventId,button.dataset.shareMatch,title):await shareTeam(tid,eventId,button.dataset.shareTeam,title);if(feedback)feedback.textContent=result;}
+  catch{if(feedback)feedback.textContent='Không thể chia sẻ liên kết. Vui lòng thử lại.';}
+ });
+}
+async function renderPublicDetail(tournament,event,detail,epoch){
+ const url=detail.match?matchURL(tournament.id,event.id,detail.match):teamURL(tournament.id,event.id,detail.team);
+ if(typeof history!=='undefined')history.replaceState(null,'',url);
+ let data;
+ try{data=await loadSpectatorDetail(supabase,event);}
+ catch{if(epoch===renderEpoch)app.innerHTML=`<main class="wrap spectator-detail"><p>Không thể tải dữ liệu thi đấu. Vui lòng thử lại.</p><button id="retryPublicDetail">Thử lại</button><a href="${esc(competitionURL(tournament.id,event.id))}">← XEM TOÀN BỘ GIẢI</a></main>`;
+  if(epoch===renderEpoch)document.querySelector('#retryPublicDetail').onclick=()=>publicTournament(tournament.id,'matches',event.id,detail);return;}
+ if(epoch!==renderEpoch)return;
+ app.innerHTML=`<main class="wrap spectator-detail">${spectatorDetail({tournament,event,...data,matchId:detail.match,teamId:detail.team})}</main><div id="modal"></div>`;
+ bindPublicMatchActions(tournament.id,event.id,tournament.name+' · '+event.name);
+ startLive(`public:${tournament.id}:${event.id}:detail`,()=>publicTournament(tournament.id,'matches',event.id,detail));
+ mountPublicVideo({tournament_id:tournament.id,event_id:event.id});
 }
 function publicTeamButton(id,name){
  return id?`<button class="public-hub-team-link" data-public-team="${id}">${esc(name||'TBD')}</button>`:`<span>${esc(name||'TBD')}</span>`;
@@ -182,7 +216,7 @@ function publicHubContent(tab,c){
  }
  if(tab==='teams')return `${rosterProblem}<div class="public-hub-team-grid">${teams.map(team=>`<article class="public-hub-team-card"><div class="public-hub-team-title">${publicTeamButton(team.id,team.name)}</div>${rosterError?'':names(team.id).length?`<ol>${names(team.id).map(n=>`<li>${esc(n)}</li>`).join('')}</ol><p class="public-hub-member-line">${names(team.id).map(esc).join(' · ')}</p>`:'<p class="public-hub-member-empty">Chưa có VĐV.</p><p class="public-hub-member-line">Chưa có VĐV.</p>'}</article>`).join('')||'<div class="public-hub-empty">Chưa có đội đăng ký.</div>'}</div>`;
  if(tab==='groups')return `${rosterProblem}<div class="public-hub-group-grid">${groups.map(group=>{const assigned=links.filter(x=>x.group_id===group.id).sort((a,b)=>(teamOrder[a.team_id]??9999)-(teamOrder[b.team_id]??9999));return `<section class="public-hub-group-card"><h2>Bảng ${esc(group.name)}</h2><ol>${assigned.map(link=>`<li><div>${publicTeamButton(link.team_id,teamMap[link.team_id])}</div>${rosterError?'':`<small>${names(link.team_id).map(esc).join(' · ')}</small>`}</li>`).join('')||'<li>Chưa có đội.</li>'}</ol></section>`}).join('')||'<div class="public-hub-empty">Chưa chia bảng.</div>'}</div>`;
- if(tab==='matches')return [...groups,...(matches.some(m=>m.stage!=='group')?[{id:null,name:'Loại trực tiếp'}]:[])].map(group=>{const gm=matches.filter(m=>group.id?m.group_id===group.id:m.stage!=='group');return `<section class="public-hub-match-group"><div class="public-hub-section-head"><h2>Bảng ${esc(group.name)}</h2><span>${gm.filter(m=>m.status==='completed').length}/${gm.length} trận</span></div><div class="public-hub-match-list">${gm.map(m=>`<article class="public-hub-match-card"><div class="public-hub-match-code">${esc(m.match_code)}${courtLabel(m.court_number)?`<small class="public-court">${courtLabel(m.court_number)}</small>`:''}</div><div class="public-hub-match-team">${publicTeamButton(m.team1_id,teamMap[m.team1_id])}</div><div class="public-hub-match-score ${m.status==='playing'?'public-hub-score-live':''}">${m.status==='playing'||m.status==='completed'?`${m.team1_score??0} — ${m.team2_score??0}`:'—'}</div><div class="public-hub-match-team">${publicTeamButton(m.team2_id,teamMap[m.team2_id])}</div><div data-match-state="${esc(m.id)}" data-base-status="${matchStatus(m)}" class="public-hub-match-state ${m.status==='playing'?'public-hub-state-live':''}">${matchStatus(m)}</div><div class="public-video-slot" data-public-video="${esc(m.id)}" data-video-label="${esc(m.match_code)}"></div></article>`).join('')||'<p>Chưa có lịch thi đấu.</p>'}</div></section>`}).join('')||'<div class="public-hub-empty">Chưa chia bảng.</div>';
+ if(tab==='matches')return [...groups,...(matches.some(m=>m.stage!=='group')?[{id:null,name:'Loại trực tiếp'}]:[])].map(group=>{const gm=matches.filter(m=>group.id?m.group_id===group.id:m.stage!=='group');return `<section class="public-hub-match-group"><div class="public-hub-section-head"><h2>Bảng ${esc(group.name)}</h2><span>${gm.filter(m=>m.status==='completed').length}/${gm.length} trận</span></div><div class="public-hub-match-list">${gm.map(m=>`<article class="public-hub-match-card"><div class="public-hub-match-code"><button class="public-match-link" data-open-match="${esc(m.id)}">${esc(m.match_code)}</button>${courtLabel(m.court_number)?`<small class="public-court">${courtLabel(m.court_number)}</small>`:''}</div><div class="public-hub-match-team">${publicTeamButton(m.team1_id,teamMap[m.team1_id])}</div><div class="public-hub-match-score ${m.status==='playing'?'public-hub-score-live':''}">${m.status==='playing'||m.status==='completed'?`${m.team1_score??0} — ${m.team2_score??0}`:'—'}</div><div class="public-hub-match-team">${publicTeamButton(m.team2_id,teamMap[m.team2_id])}</div><div data-match-state="${esc(m.id)}" data-base-status="${matchStatus(m)}" class="public-hub-match-state ${m.status==='playing'?'public-hub-state-live':''}">${matchStatus(m)}</div><div class="public-video-slot" data-public-video="${esc(m.id)}" data-video-label="${esc(m.match_code)}"></div><div class="public-match-actions"><button class="secondary" data-share-match="${esc(m.id)}">CHIA SẺ TRẬN</button><span data-share-feedback role="status" aria-live="polite"></span></div></article>`).join('')||'<p>Chưa có lịch thi đấu.</p>'}</div></section>`}).join('')||'<div class="public-hub-empty">Chưa chia bảng.</div>';
  if(tab==='standings')return standings.map(item=>`<section class="public-hub-standings"><div class="public-hub-section-head"><h2>Bảng ${esc(item.group.name)}</h2></div><div class="public-hub-table-wrap"><table><thead><tr><th>#</th><th>Đội</th><th>Tr</th><th>W</th><th>L</th><th>+/-</th></tr></thead><tbody>${item.rows.map((row,i)=>`<tr class="${i<2?'qualify-row':''}"><td>${i+1}</td><td>${publicTeamButton(row.id,row.name)}</td><td>${row.p}</td><td>${row.w}</td><td>${row.l}</td><td>${row.diff>0?'+':''}${row.diff}</td></tr>`).join('')}</tbody></table></div></section>`).join('')||'<div class="public-hub-empty">Chưa có bảng xếp hạng.</div>';
  if(tab==='awards')return awardShowcase(awards);
  return '';
