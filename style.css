@@ -328,15 +328,45 @@
 .spectator-journey-row>*{min-width:0;overflow-wrap:anywhere}.spectator-journey-row>a{color:#35402b}.spectator-journey-row>small{grid-column:4;color:#527064}
 @media(max-width:600px){.spectator-detail{padding:18px 16px}.spectator-detail-teams{gap:8px;font-size:17px}.spectator-journey-row{grid-template-columns:minmax(0,1fr) auto auto;font-size:13px}.spectator-journey-row>div{grid-column:1/-1}.spectator-journey-row>small{grid-column:1/-1}.spectator-detail button{min-height:44px}}
 
-/* Persisted knockout rounds, sharing spectator cards and LIVE discovery hooks. */
-.knockout-bracket{display:flex;gap:20px;overflow-x:auto;align-items:stretch;padding:12px 0}
-.knockout-round{min-width:260px;flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:16px}
-.knockout-round h2{font-size:18px}
-.knockout-card.public-hub-match-card{display:flex;flex-direction:column;align-items:stretch;gap:10px;padding:16px}
-.knockout-score{display:flex;flex-wrap:wrap;gap:8px}
-.knockout-score label{flex:1;min-width:70px}
-.knockout-score input{width:100%}
-.knockout-score [role=alert]{color:#b42318;width:100%}
+/* Horizontal knockout layout. Shared rows keep real source connectors aligned
+   when Admin controls, long names or existing LIVE buttons change card height. */
+#workcontent:has(.knockout-scroll),.public-hub-view:has(.knockout-scroll){min-width:0}
+.knockout-scroll{max-width:100%;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;padding:12px 2px 18px;scrollbar-color:#909879 #eeece3;scrollbar-width:thin}
+.knockout-scroll:focus-visible{outline:2px solid #68734e;outline-offset:2px;border-radius:10px}
+.knockout-bracket{--round-width:256px;--round-gap:44px;display:grid;grid-template-columns:repeat(var(--round-count),var(--round-width));grid-template-rows:auto repeat(var(--bracket-rows),minmax(84px,1fr));column-gap:var(--round-gap);width:max-content;min-width:100%;align-items:stretch;background:#f4f2ea;border-radius:12px;padding:12px}
+.knockout-round{display:grid;grid-template-rows:subgrid;grid-row:1 / -1;min-width:0;position:relative}
+.knockout-round h2{grid-row:1;margin:0 0 12px;padding:9px 10px;border-bottom:2px solid #929a7d;color:#454f33;font-size:12px;line-height:18px;letter-spacing:.09em;text-transform:uppercase}
+.knockout-round:not(:last-child) h2::after{content:'→';float:right;color:#858d72}
+.knockout-card{position:relative;z-index:1;grid-column:1;align-self:center;min-width:0;margin:8px 0;padding:10px;border:1px solid #d4d7c7;border-radius:11px;background:#fffef9;box-shadow:0 2px 4px #353c2707;font-size:12px}
+.knockout-card-head{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px}
+.knockout-card .knockout-code{display:inline-block;flex-shrink:0;margin:0;padding:3px 6px;border-radius:5px;background:#ecefdf;color:#454f33;font-size:11px;line-height:16px;font-weight:800}
+.knockout-card-state{min-width:0;color:#797a68;font-size:9px;font-weight:700;text-align:right}
+.knockout-team{display:grid;grid-template-columns:minmax(0,1fr) 28px;align-items:center;gap:8px;min-height:32px;padding:5px 0;line-height:1.35;font-weight:650}
+.knockout-team+.knockout-team{border-top:1px solid #eeeee5}
+.knockout-team>span{min-width:0;overflow-wrap:anywhere}
+.knockout-team>strong{text-align:center;padding:3px 0;border-radius:5px;background:#f1f1e8;color:#454f33;font-size:13px;font-variant-numeric:tabular-nums}
+.knockout-card-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:5px;margin-top:6px;padding-top:6px;border-top:1px solid #eeeee5;color:#7a7a67;font-size:10px}
+.knockout-card .public-video-slot{font-size:10px;min-width:0;overflow-wrap:anywhere}
+.knockout-card .public-video-slot:empty{display:none}
+.knockout-bracket-admin .knockout-court{display:none}
+.knockout-bracket-admin .knockout-card-footer:has(.public-video-slot:empty){display:none}
+.knockout-card .public-video-button{min-height:28px;padding:5px 8px;font-size:10px;border-radius:6px}
+.knockout-card .match-court-select{display:block;width:100%;max-width:none;min-height:28px;margin:7px 0 0;padding:5px 7px;font-size:11px;border-radius:6px}
+.knockout-score{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;align-items:end;gap:6px;margin-top:7px;padding-top:7px;border-top:1px solid #eeeee5}
+.knockout-score label{min-width:0;margin:0;gap:3px;font-size:10px}
+.knockout-score input{width:100%;min-width:0;height:30px;padding:4px 6px;border-radius:6px;font-size:12px}
+.knockout-score button{height:30px;padding:5px 7px;border-radius:6px;font-size:10px}
+.knockout-score [role=alert]{grid-column:1 / -1;color:#b42318;margin:0;font-size:11px;overflow-wrap:anywhere}
+.knockout-score [role=alert]:empty{display:none}
+.knockout-edge{position:relative;grid-column:1;justify-self:end;width:0;pointer-events:none;z-index:0}
+.knockout-wire{position:absolute;left:0;top:calc(100% / var(--edge-rows));width:var(--round-gap);height:calc(100% * var(--travel) / var(--edge-rows));color:#a0a88a}
+.knockout-wire::before{content:'';position:absolute;left:0;top:0;width:50%;height:100%;border-top:1px solid;border-right:1px solid}
+.knockout-wire::after{content:'';position:absolute;right:0;bottom:0;width:50%;border-top:1px solid}
+.knockout-edge-up .knockout-wire::before{border-top:0;border-bottom:1px solid}
+.knockout-edge-up .knockout-wire::after{top:0;bottom:auto}
+#koControls{padding:12px 14px;font-size:13px}
+#koControls [role=alert]:empty{display:none}
+@media(max-width:600px){.knockout-bracket{--round-width:252px;--round-gap:36px;min-width:max-content;padding:8px}.knockout-scroll{padding-bottom:16px}.knockout-card .match-court-select,.knockout-score input,.knockout-score button{min-height:34px}.knockout-card .public-video-button{min-height:32px}}
 #koPreview fieldset{margin:16px 0;padding:16px}
 #koPreview fieldset label{display:flex;align-items:center;gap:12px;margin:8px 0}
 #koPreview fieldset input{width:80px}
