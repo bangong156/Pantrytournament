@@ -327,3 +327,16 @@
 .spectator-journey-row{display:grid;grid-template-columns:110px 60px 70px minmax(0,1fr);gap:8px;align-items:center;padding:12px 0;border-bottom:1px solid #dedbd1;font-size:14px}
 .spectator-journey-row>*{min-width:0;overflow-wrap:anywhere}.spectator-journey-row>a{color:#35402b}.spectator-journey-row>small{grid-column:4;color:#527064}
 @media(max-width:600px){.spectator-detail{padding:18px 16px}.spectator-detail-teams{gap:8px;font-size:17px}.spectator-journey-row{grid-template-columns:minmax(0,1fr) auto auto;font-size:13px}.spectator-journey-row>div{grid-column:1/-1}.spectator-journey-row>small{grid-column:1/-1}.spectator-detail button{min-height:44px}}
+
+/* Persisted knockout rounds, sharing spectator cards and LIVE discovery hooks. */
+.knockout-bracket{display:flex;gap:20px;overflow-x:auto;align-items:stretch;padding:12px 0}
+.knockout-round{min-width:260px;flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:16px}
+.knockout-round h2{font-size:18px}
+.knockout-card.public-hub-match-card{display:flex;flex-direction:column;align-items:stretch;gap:10px;padding:16px}
+.knockout-score{display:flex;flex-wrap:wrap;gap:8px}
+.knockout-score label{flex:1;min-width:70px}
+.knockout-score input{width:100%}
+.knockout-score [role=alert]{color:#b42318;width:100%}
+#koPreview fieldset{margin:16px 0;padding:16px}
+#koPreview fieldset label{display:flex;align-items:center;gap:12px;margin:8px 0}
+#koPreview fieldset input{width:80px}

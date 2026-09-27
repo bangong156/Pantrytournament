@@ -10,5 +10,8 @@
     "vite": "latest",
     "xlsx": "latest"
   },
-  "type": "module"
+  "type": "module",
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8"
+  }
 }
