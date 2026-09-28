@@ -1,5 +1,6 @@
+import { suggestMatches } from './smart-calling.js';
 import { competitionClient } from './event-scope.js';
-import { courtLabel, courtOptions } from './match-courts.js';
+import { courtLabel, courtOptions, assignCourt } from './match-courts.js';
 import './operations.css';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 export function readiness(teams){
@@ -18,14 +19,16 @@ export async function mountOperations({client,event,tournament,tab,allowed,isCur
    db.from('group_teams').select('group_id,team_id'),
    db.from('team_members').select('team_id,player_id,slot_order').order('slot_order'),
    tab==='control'?db.from('matches').select('*').eq('tournament_id',tournament.id).order('scheduled_order'):Promise.resolve({data:[]}),
-   tournament.format==='mlp'?db.from('mlp_slots').select('*').eq('tournament_id',tournament.id):Promise.resolve({data:[]})
+   tournament.format==='mlp'?db.from('mlp_slots').select('*').eq('tournament_id',tournament.id):Promise.resolve({data:[]}),
+   tab==='control'?client.from('tournaments').select('court_count').eq('id',tournament.id).single():Promise.resolve({data:null}),
+   tab==='control'?client.from('matches').select('id,event_id,status,court_number,team1_id,team2_id').eq('tournament_id',tournament.id).in('status',['playing','scheduled']):Promise.resolve({data:[]})
   ]);
   for(const r of results)if(r.error)throw r.error;
-  const [teams,groups,links,members,matches,slots]=results.map(r=>r.data||[]);
+  const [teams,groups,links,members,matches,slots,settings,occupancy]=results.map(r=>r.data||[]);
   const ids=[...new Set(members.map(m=>m.player_id))];
   const {data:players,error}=ids.length?await client.from('players').select('id,full_name').in('id',ids):{data:[]};
   if(error)throw error;
-  return {teams,groups,links,members,matches,slots,pm:Object.fromEntries((players||[]).map(p=>[p.id,p.full_name]))};
+  return {teams,groups,links,members,matches,slots,courtCount:settings?.court_count??6,occupancy,pm:Object.fromEntries((players||[]).map(p=>[p.id,p.full_name]))};
  };
  const refresh=async()=>{
   if(busy||!isCurrent()||!allowed())return;
@@ -58,9 +61,30 @@ export async function mountOperations({client,event,tournament,tab,allowed,isCur
    body.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{filter=b.dataset.filter;draw(data)});list();
   }else{
    const active=matches.filter(m=>m.status==='playing'),waiting=matches.filter(m=>m.status==='scheduled'),done=matches.filter(m=>m.status==='completed');
-   const courts=[...new Set([...courtOptions(),...matches.map(m=>m.court_number).filter(n=>Number.isInteger(n)&&n>0)])].sort((a,b)=>a-b),occupied=new Set(active.map(m=>m.court_number).filter(Boolean));
-   const card=m=>`<article class="panel ops-match"><small>${courtLabel(m.court_number)||'Chưa xếp sân'} · ${esc(event.name)} · ${esc(groups.find(g=>g.id===m.group_id)?.name?`Bảng ${groups.find(g=>g.id===m.group_id).name}`:m.stage)}</small><h3>${esc(m.match_code)}</h3><b>${esc(tm[m.team1_id]?.name||'Chưa xác định')}</b><p>vs</p><b>${esc(tm[m.team2_id]?.name||'Chưa xác định')}</b><h3>${m.status==='playing'||m.status==='completed'?`${m.team1_score??0} : ${m.team2_score??0}`:'—'}</h3><span data-ops-live="${m.id}"></span>${m.status==='scheduled'?`<p class="ops-badge ${tm[m.team1_id]?.checked_in&&tm[m.team2_id]?.checked_in?'ops-ready':'ops-missing'}">${tm[m.team1_id]?.checked_in&&tm[m.team2_id]?.checked_in?'✓ SẴN SÀNG':'⚠ CHƯA ĐỦ CHECK-IN'}</p>`:''}<button data-open="${m.id}" class="secondary">XEM TRẬN</button></article>`;
-   body.innerHTML=`<div class="ops-grid ops-stats">${[`${courts.length} SÂN`,`${occupied.size} ĐANG ĐÁNH`,`${courts.length-occupied.size} TRỐNG`,`${done.length} / ${matches.length} TRẬN HOÀN THÀNH`,`${waiting.length} TRẬN ĐANG CHỜ`,`${groups.filter(g=>!readiness(groupTeams(g)).ready).length} BẢNG CHƯA ĐỦ CHECK-IN`].map(s=>`<div class="panel"><b>${s}</b></div>`).join('')}<div class="panel" data-ops-live-count>Đang tải LIVE…</div></div><h2>TÌNH TRẠNG SÂN</h2><div class="ops-grid">${courts.map(n=>{const ms=active.filter(m=>m.court_number===n);return `<section><h3>SÂN ${n} · ${ms.length?'● ĐANG ĐÁNH':'○ TRỐNG'}</h3>${ms.length?ms.map(card).join(''):'<div class="panel">Chưa có trận đang thi đấu.</div>'}</section>`}).join('')}</div><h2>ĐANG DIỄN RA</h2><div class="ops-grid">${active.map(card).join('')||'<p>Chưa có trận đang thi đấu.</p>'}</div><h2>TRẬN ĐANG CHỜ</h2><div class="ops-grid">${waiting.map(card).join('')||'<p>Không có trận đang chờ.</p>'}</div><h2>TÌNH TRẠNG CÁC BẢNG</h2>${groupSummary()}`;
+   const courts=courtOptions(null,data.courtCount),plan=suggestMatches({matches,teams,groups,courtCount:data.courtCount,occupancy:data.occupancy});
+   const occupied=new Set(plan.active.map(m=>m.court_number).filter(n=>courts.includes(n)));
+   const calledCourts=new Set(plan.called.map(m=>m.court_number).filter(n=>!occupied.has(n)));
+   const playingTeams=new Set(plan.active.flatMap(m=>[m.team1_id,m.team2_id]));
+   const ready=m=>!!(m.team1_id&&m.team2_id&&!playingTeams.has(m.team1_id)&&!playingTeams.has(m.team2_id)&&(m.stage!=='group'||(tm[m.team1_id]?.checked_in&&tm[m.team2_id]?.checked_in)));
+   const waitingLabel=m=>playingTeams.has(m.team1_id)||playingTeams.has(m.team2_id)?'⚠ ĐỘI ĐANG THI ĐẤU':!m.team1_id||!m.team2_id?'⚠ CHƯA XÁC ĐỊNH ĐỦ ĐỘI':ready(m)?'✓ SẴN SÀNG':'⚠ CHƯA ĐỦ CHECK-IN';
+   const card=m=>`<article class="panel ops-match"><small>${courtLabel(m.court_number)||'Chưa xếp sân'} · ${esc(event.name)} · ${esc(groups.find(g=>g.id===m.group_id)?.name?`Bảng ${groups.find(g=>g.id===m.group_id).name}`:m.stage)}</small><h3>${esc(m.match_code)}</h3><b>${esc(tm[m.team1_id]?.name||'Chưa xác định')}</b><p>vs</p><b>${esc(tm[m.team2_id]?.name||'Chưa xác định')}</b><h3>${m.status==='playing'||m.status==='completed'?`${m.team1_score??0} : ${m.team2_score??0}`:'—'}</h3><span data-ops-live="${m.id}"></span>${m.status==='scheduled'&&courts.includes(m.court_number)?'<p>🟡 ĐANG GỌI</p>':''}${m.status==='scheduled'?`<p class="ops-badge ${ready(m)?'ops-ready':'ops-missing'}">${waitingLabel(m)}</p>`:''}<button data-open="${m.id}" class="secondary">XEM TRẬN</button></article>`;
+   body.innerHTML=`<div class="ops-grid ops-stats">${[`${courts.length} SÂN`,`${occupied.size} ĐANG ĐÁNH`,`${courts.length-occupied.size-calledCourts.size} TRỐNG`,`${calledCourts.size} ĐANG GỌI`,`${done.length} / ${matches.length} TRẬN HOÀN THÀNH`,`${waiting.length} TRẬN ĐANG CHỜ`,`${groups.filter(g=>!readiness(groupTeams(g)).ready).length} BẢNG CHƯA ĐỦ CHECK-IN`].map(s=>`<div class="panel"><b>${s}</b></div>`).join('')}<div class="panel" data-ops-live-count>Đang tải LIVE…</div></div><h2>TÌNH TRẠNG SÂN</h2><div class="ops-grid">${courts.map(n=>{
+     const occupants=plan.active.filter(m=>m.court_number===n),calls=plan.called.filter(m=>m.court_number===n),suggestion=plan.suggestions.get(n);
+     const rows=occupants.length?occupants:calls;
+     const content=rows.length?rows.map(row=>{const local=matches.find(m=>m.id===row.id);return local?card(local):'<div class="panel">Sân đang được sử dụng bởi nội dung khác trong giải.</div>'}).join(''):suggestion?`<div><h4>GỢI Ý TIẾP THEO</h4>${card(suggestion)}${suggestion.stage==='group'?'<p>✓ ĐÃ CHECK-IN</p>':''}<button data-call="${suggestion.id}" data-court="${n}">GỌI VÀO SÂN ${n}</button></div>`:'<div class="panel">Chưa có trận phù hợp để gọi.</div>';
+     return `<section><h3>SÂN ${n} · ${occupants.length?'● ĐANG ĐÁNH':calls.length?'🟡 ĐANG GỌI':'○ TRỐNG'}</h3>${content}</section>`;
+   }).join('')}</div><h2>ĐANG DIỄN RA</h2><div class="ops-grid">${active.map(card).join('')||'<p>Chưa có trận đang thi đấu.</p>'}</div><h2>TRẬN ĐANG CHỜ</h2><div class="ops-grid">${waiting.map(card).join('')||'<p>Không có trận đang chờ.</p>'}</div><h2>TÌNH TRẠNG CÁC BẢNG</h2>${groupSummary()}`;
+   body.querySelectorAll('[data-call]').forEach(button=>button.onclick=async()=>{
+    if(busy||!allowed()||!isCurrent())return;busy=true;button.disabled=true;
+    let failure;
+    try{
+     const fresh=await read();if(!allowed()||!isCurrent())return;
+     const next=suggestMatches({matches:fresh.matches,teams:fresh.teams,groups:fresh.groups,courtCount:fresh.courtCount,occupancy:fresh.occupancy}).suggestions.get(Number(button.dataset.court));
+     if(next?.id!==button.dataset.call)throw Error('Tình trạng sân hoặc đội đã thay đổi. Vui lòng chọn gợi ý mới.');
+     await assignCourt(db,tournament.id,next.id,button.dataset.court,next.court_number??null);
+    }catch(error){failure=error.message}finally{busy=false;button.disabled=false}
+    if(isCurrent()){await refresh();if(failure)host.querySelector('[data-ops-error]').textContent=failure}
+   });
    body.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openMatch(matches.find(m=>m.id===b.dataset.open)));
    fetch('/.netlify/functions/video-playback?'+new URLSearchParams({tournament_id:tournament.id,event_id:event.id}),{cache:'no-store',signal:AbortSignal.timeout(12000)}).then(r=>{if(!r.ok)throw Error();return r.json()}).then(result=>{if(!body.isConnected||!isCurrent())return;const ids=new Set((result.streams||[]).map(s=>s.match_id).filter(id=>matches.some(m=>m.id===id)));body.querySelector('[data-ops-live-count]').textContent=`🔴 ${ids.size} LIVE`;body.querySelectorAll('[data-ops-live]').forEach(el=>el.textContent=ids.has(el.dataset.opsLive)?'🔴 LIVE':'')}).catch(()=>{if(body.isConnected)body.querySelector('[data-ops-live-count]').textContent='Chưa tải được LIVE'});
   }

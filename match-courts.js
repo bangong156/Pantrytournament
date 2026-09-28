@@ -1,13 +1,15 @@
 export function courtLabel(number) {
   return Number.isInteger(number)&&number>0?`SÂN ${number}`:'';
 }
-export function courtOptions(current) {
-  return [...new Set([1,2,3,4,5,6,...(courtLabel(current)?[current]:[])])];
+export function courtOptions(current,count=6) {
+  return Array.from({length:Number.isInteger(count)&&count>0?count:6},(_,i)=>i+1);
 }
-export async function assignCourt(db, tournamentId, matchId, value) {
+export async function assignCourt(db, tournamentId, matchId, value, expectedCourt=undefined) {
   const court=value===''?null:Number(value);
   if(court!==null&&(!Number.isInteger(court)||court<=0))throw new Error('Sân phải là số nguyên dương.');
-  const {data,error}=await db.from('matches').update({court_number:court}).eq('tournament_id',tournamentId).eq('id',matchId).select('id,court_number').single();
+  let query=db.from('matches').update({court_number:court}).eq('tournament_id',tournamentId).eq('id',matchId);
+  if(expectedCourt!==undefined){query=query.eq('status','scheduled');query=expectedCourt===null?query.is('court_number',null):query.eq('court_number',expectedCourt)}
+  const {data,error}=await query.select('id,court_number').single();
   if(error)throw error;
   return data;
 }

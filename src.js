@@ -414,7 +414,7 @@ function mlpStyleFields(){return `<div class="mlpbox"><p class="label">Style MLP
 function createModal(){
  if(isOrganizer()&&(!organizerValid(organizerState)||!organizerState.account.can_create_tournaments))return organizerBlocked(!organizerValid(organizerState)?ORGANIZER_EXPIRED:'Tài khoản chưa được phép tự tạo giải.');
  const epoch=renderEpoch;
- document.querySelector('#modal').innerHTML=`<div class="overlay"><form class="modal" id="create"><div class="modalhead"><div><small>TẠO WORKSPACE</small><h2>Tạo giải mới</h2></div><button type="button" class="x">×</button></div><label>Tên giải / Minigame<input name="name" required></label><div class="twocol"><label>Loại<select name="event_type"><option value="tournament">Giải đấu</option><option value="minigame">Minigame</option></select></label><label>Ngày bắt đầu<input name="start_date" type="date" required></label></div><label>Giờ bắt đầu giải<input name="start_time" type="time"></label><p class="label">Format thi đấu</p><div class="formats"><label><input type="radio" name="format" value="doubles" checked><span><b>👥 Đánh đôi</b><small>2 VĐV / đội</small></span></label><label><input type="radio" name="format" value="mlp"><span><b>🛡 Đồng đội / MLP</b><small>Chọn style MLP</small></span></label></div><div id="mlp"></div><label><span id="expectedLabel">Số cặp VĐV dự kiến</span><input name="expected_team_count" type="number" min="1" step="1"></label><button class="wide">Tạo giải</button><div id="msg" role="alert"></div></form></div>`;
+ document.querySelector('#modal').innerHTML=`<div class="overlay"><form class="modal" id="create"><div class="modalhead"><div><small>TẠO WORKSPACE</small><h2>Tạo giải mới</h2></div><button type="button" class="x">×</button></div><label>Tên giải / Minigame<input name="name" required></label><div class="twocol"><label>Loại<select name="event_type"><option value="tournament">Giải đấu</option><option value="minigame">Minigame</option></select></label><label>Ngày bắt đầu<input name="start_date" type="date" required></label></div><label>Giờ bắt đầu giải<input name="start_time" type="time"></label><label>SỐ SÂN SỬ DỤNG<input name="court_count" type="number" min="1" step="1" value="6" required></label><p class="label">Format thi đấu</p><div class="formats"><label><input type="radio" name="format" value="doubles" checked><span><b>👥 Đánh đôi</b><small>2 VĐV / đội</small></span></label><label><input type="radio" name="format" value="mlp"><span><b>🛡 Đồng đội / MLP</b><small>Chọn style MLP</small></span></label></div><div id="mlp"></div><label><span id="expectedLabel">Số cặp VĐV dự kiến</span><input name="expected_team_count" type="number" min="1" step="1"></label><button class="wide">Tạo giải</button><div id="msg" role="alert"></div></form></div>`;
  const form=document.querySelector('#create');form.querySelector('.x').onclick=()=>document.querySelector('#modal').innerHTML='';
  const syncMlp=()=>{
   const mlp=form.querySelector('[name=format]:checked').value==='mlp';
@@ -425,8 +425,8 @@ function createModal(){
  form.querySelectorAll('[name=format]').forEach(r=>r.onchange=syncMlp);
  form.onsubmit=async e=>{
   e.preventDefault();const f=new FormData(form),button=form.querySelector('.wide');button.disabled=true;
-  const {data,error}=await supabase.rpc('create_competition_tournament',{
-   p_name:f.get('name').trim(),p_event_type:f.get('event_type'),p_start_date:f.get('start_date'),
+  const {data,error}=await supabase.rpc('create_competition_with_courts',{
+   p_court_count:Number(f.get('court_count')),p_name:f.get('name').trim(),p_event_type:f.get('event_type'),p_start_date:f.get('start_date'),
    p_start_time:f.get('start_time')||null,p_format:f.get('format'),
    p_expected_team_count:f.get('expected_team_count')?Number(f.get('expected_team_count')):null,p_style:f.get('mlp_style')||'basic'
   });
@@ -526,6 +526,18 @@ async function renderTournamentInfoEditor(t,{preserveOnError=false}={}){
  if(error){if(!preserveOnError)area.innerHTML=`<div class="panel">${esc(error.message)}</div>`;return false}
  const isAdmin=String(profile?.role||'').toLowerCase()==='admin'||organizerAccess(t.id),image=posterUrl(t.id,info?.poster_path);
  area.innerHTML=`<section class="info-editor"><div class="page-kicker">TRANG SỰ KIỆN CÔNG KHAI</div><h1>Thông tin giải</h1><p class="muted">Nội dung này xuất hiện trên trang Thông tin giải.</p><div class="panel"><h2>POSTER GIẢI</h2><div id="posterPreview" class="editor-poster">${image?`<img src="${esc(image)}" alt="Poster hiện tại">`:'<p>Chưa có poster.</p>'}</div>${isAdmin?'<label>Chọn poster mới<input id="posterUpload" type="file" accept="image/jpeg,image/png,image/webp"></label><button type="button" class="secondary" id="removePoster">Gỡ poster</button>':''}</div><div class="panel"><label>NỘI DUNG GIẢI<textarea id="eventContent" rows="7" ${isAdmin?'':'readonly'} placeholder="Giới thiệu và nội dung giải">${esc(info?.content||'')}</textarea></label><label>GIẢI THƯỞNG<textarea id="eventPrizes" rows="5" ${isAdmin?'':'readonly'} placeholder="Thông tin giải thưởng">${esc(info?.prize_information||'')}</textarea></label><label>QUY ĐỊNH<textarea id="eventRules" rows="7" ${isAdmin?'':'readonly'} placeholder="Thể lệ và quy định">${esc(info?.rules||'')}</textarea></label><label>LINK ĐĂNG KÝ<input id="eventRegistration" type="text" inputmode="url" ${isAdmin?'':'readonly'} value="${esc(info?.registration_url||'')}" placeholder="Dán link nhóm Zalo hoặc link đăng ký"></label><p class="info-registration-help">Khách sẽ được chuyển đến link này khi bấm Đăng ký ngay.</p>${isAdmin?'<button id="saveEventInfo">Lưu thông tin giải</button>':''}<p id="eventInfoMessage" role="status"></p></div></section>`;
+ if(canOperate(t.id)){
+  const settings=document.createElement('form');settings.className='panel';
+  settings.innerHTML=`<label>Số sân sử dụng<input name="court_count" type="number" min="1" step="1" value="${t.court_count??6}" required></label><button>LƯU</button><p role="status"></p>`;
+  area.querySelector('.info-editor').prepend(settings);
+  settings.onsubmit=async e=>{
+   e.preventDefault();const button=settings.querySelector('button'),message=settings.querySelector('[role=status]'),count=Number(settings.elements.court_count.value);
+   if(!canOperate(t.id)||epoch!==renderEpoch)return;
+   if(!Number.isInteger(count)||count<1){message.textContent='Số sân phải là số nguyên từ 1 trở lên.';return}
+   button.disabled=true;
+   try{const {data,error}=await supabase.from('tournaments').update({court_count:count}).eq('id',t.id).select('court_count').single();if(error)throw error;t.court_count=data.court_count;if(currentTournament?.id===t.id)currentTournament.court_count=data.court_count;message.textContent='✓ Đã lưu số sân.'}catch(error){message.textContent=error.message}finally{button.disabled=false}
+  };
+ }
  if(!isAdmin)return true;
  const savedInfo=info||{poster_path:null};
  let pendingPoster=null,removePoster=false;
@@ -895,7 +907,8 @@ function mountCourtSelect(host,match,db,tid){
  if(!match||!canOperate(tid))return;
  const select=document.createElement('select');select.className='match-court-select';
  select.setAttribute('aria-label',`Sân cho trận ${match.match_code}`);
- select.innerHTML='<option value="">Chưa xếp sân</option>'+courtOptions(match.court_number).map(n=>`<option value="${n}">Sân ${n}</option>`).join('');
+ select.innerHTML='<option value="">Chưa xếp sân</option>'+courtOptions(match.court_number,currentTournament?.court_count).map(n=>`<option value="${n}">Sân ${n}</option>`).join('');
+ if(match.court_number&&!courtOptions(null,currentTournament?.court_count).includes(match.court_number)){const previous=new Option(`Sân ${match.court_number} (ngoài số sân sử dụng)`,String(match.court_number));previous.disabled=true;select.add(previous)}
  select.value=String(match.court_number??'');host.append(select);
  select.onchange=async()=>{
   select.disabled=true;
