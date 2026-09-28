@@ -29,7 +29,7 @@ export function publicBracket(matches,teamNames,{admin=false}={}){
   const card=m=>{
     const codeTag=admin||!m.id?'b':'button';
     const hasScore=m.team1_score!=null||m.team2_score!=null;
-    return `<article class="knockout-card" aria-label="${esc(m.match_code)}" style="grid-row:${positions.get(m)+1} / span 2">
+    return `<article class="knockout-card" ${m.id?`data-knockout-match="${esc(m.id)}"`:''} aria-label="${esc(m.match_code)}" style="grid-row:${positions.get(m)+1} / span 2">
       <div class="knockout-card-head"><${codeTag} class="knockout-code ${codeTag==='button'?'public-match-link':''}" ${m.id?`data-open-match="${esc(m.id)}"`:''}>${esc(m.match_code)}</${codeTag}><span class="knockout-card-state" ${m.id?`data-match-state="${esc(m.id)}"`:''} data-base-status="${matchStatus(m)}">${matchStatus(m)}</span></div>
       ${[1,2].map(side=>`<div class="knockout-team"><span>${esc(sourceLabel(m,side,matches,teamNames))}</span><strong aria-label="Điểm đội ${side}">${hasScore?esc(m[`team${side}_score`]??'—'):'—'}</strong></div>`).join('')}
       <div class="knockout-card-footer"><span class="knockout-court">${courtLabel(m.court_number)||'Chưa xếp sân'}</span>${m.id?`<div class="public-video-slot" data-public-video="${esc(m.id)}" data-video-label="${esc(m.match_code)}"></div>`:''}</div>
@@ -58,12 +58,21 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
     host.innerHTML=`<small>KNOCKOUT</small><h1>${esc(event.name)}</h1><div class="panel" id="koControls"></div>${publicBracket(matches,names,{admin:true})}<div id="koPreview"></div>`;
     const controls=host.querySelector('#koControls');
     // Preserve existing court control; scoring is only exposed for managed doubles.
-    for(const m of matches){const card=host.querySelector(`[data-open-match="${m.id}"]`)?.closest('article');if(!card)continue;mountCourt(card,m,db);
+    for(const m of matches){const card=host.querySelector(`[data-knockout-match="${m.id}"]`);if(!card)continue;mountCourt(card,m,db);
       if(managed&&event.format==='doubles'&&m.team1_id&&m.team2_id){
-        const form=document.createElement('form');form.className='knockout-score';
-        form.innerHTML=`<label>Điểm 1<input name="s1" type="number" min="0" step="1" required value="${m.team1_score??''}"></label><label>Điểm 2<input name="s2" type="number" min="0" step="1" required value="${m.team2_score??''}"></label><button>Lưu kết quả</button><p role="alert"></p>`;
-        card.append(form);form.onsubmit=async e=>{e.preventDefault();const b=form.querySelector('button');b.disabled=true;
-          try{await rpc('pantry_knockout_score',{p_match:m.id,p_expected_revision:decision.revision,p_expected_score_version:m.score_version,p_score1:Number(form.elements.s1.value),p_score2:Number(form.elements.s2.value)});if(isCurrent())await renderManagedKnockout({client,event,host,standingsData,isCurrent,mountCourt,mountLive})}
+        const form=document.createElement('form');form.className='knockout-score';form.noValidate=true;
+        form.innerHTML=`<label>Điểm đội 1<input name="s1" type="number" min="0" step="1" required value="${m.team1_score??''}"></label><span class="knockout-score-separator" aria-hidden="true">:</span><label>Điểm đội 2<input name="s2" type="number" min="0" step="1" required value="${m.team2_score??''}"></label><button>LƯU TỈ SỐ</button><p role="alert"></p>`;
+        card.append(form);form.onsubmit=async e=>{
+          e.preventDefault();const b=form.querySelector('button'),errorBox=form.querySelector('[role=alert]');
+          if(b.disabled)return;
+          errorBox.textContent='';
+          const values=[form.elements.s1.value.trim(),form.elements.s2.value.trim()],scores=values.map(Number);
+          if(values.some(value=>value==='')||scores.some(score=>!Number.isFinite(score)||!Number.isInteger(score)||score<0)){
+            errorBox.textContent='Vui lòng nhập đầy đủ hai tỉ số là số nguyên không âm.';return;
+          }
+          if(scores[0]===scores[1]){errorBox.textContent='Trận knockout không được hòa. Vui lòng nhập tỉ số xác định đội thắng.';return}
+          b.disabled=true;
+          try{await rpc('pantry_knockout_score',{p_match:m.id,p_expected_revision:decision.revision,p_expected_score_version:m.score_version,p_score1:scores[0],p_score2:scores[1]});if(isCurrent())await renderManagedKnockout({client,event,host,standingsData,isCurrent,mountCourt,mountLive})}
           catch(error){form.querySelector('[role=alert]').textContent=error.message}finally{b.disabled=false}
         };
       }

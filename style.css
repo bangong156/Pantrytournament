@@ -352,7 +352,8 @@
 .knockout-bracket-admin .knockout-card-footer:has(.public-video-slot:empty){display:none}
 .knockout-card .public-video-button{min-height:28px;padding:5px 8px;font-size:10px;border-radius:6px}
 .knockout-card .match-court-select{display:block;width:100%;max-width:none;min-height:28px;margin:7px 0 0;padding:5px 7px;font-size:11px;border-radius:6px}
-.knockout-score{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;align-items:end;gap:6px;margin-top:7px;padding-top:7px;border-top:1px solid #eeeee5}
+.knockout-score{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto;align-items:end;gap:6px;margin-top:7px;padding-top:7px;border-top:1px solid #eeeee5}
+.knockout-score-separator{align-self:end;line-height:30px;font-weight:800}
 .knockout-score label{min-width:0;margin:0;gap:3px;font-size:10px}
 .knockout-score input{width:100%;min-width:0;height:30px;padding:4px 6px;border-radius:6px;font-size:12px}
 .knockout-score button{height:30px;padding:5px 7px;border-radius:6px;font-size:10px}

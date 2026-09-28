@@ -93,5 +93,6 @@ export function sourceLabel(match,side,matches,teamNames){
 export async function knockoutRPC(client,event,name,args={}){
   if(!event?.id)throw new Error('Chưa chọn nội dung thi đấu.');
   const {data,error}=await client.rpc(name,{...args,p_event:event.id}).setHeader('x-client-info',`pantry-event/${event.id}`);
+  if(error&&name==='pantry_knockout_score')throw error;
   if(error){const e=new Error(['PT409','40001'].includes(error.code)?`Xung đột Admin: ${error.message}. Tải lại để kiểm tra trước khi thử lại.`:error.code==='PGRST202'?'Chưa cài RPC Knockout. Cần áp dụng migration engine.':error.message);e.code=error.code;throw e}return data;
 }
