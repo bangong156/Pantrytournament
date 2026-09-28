@@ -455,3 +455,8 @@
   .public-home-header:has(.homepage-guide-actions) .pantry-header-brand>span{display:none}
   .homepage-guide-actions button{padding:8px}
 }
+
+/* Persistent shared homepage action, outside auth-specific #app markup. */
+#homepageGuide{display:none}
+body:has(#app > .public-home-header) #homepageGuide,
+body:has(#app > .dashboard-header) #homepageGuide{display:flex;justify-content:flex-end;padding-top:12px;padding-bottom:12px}
