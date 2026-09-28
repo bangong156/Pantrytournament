@@ -911,7 +911,16 @@ function refereeCodeModal(tid,g){
 }
 
 async function renderStandings(tid){const epoch=renderEpoch;let data=await standingsData(tid);if(epoch!==renderEpoch)return;startLive(`admin:standings:${tid}`,()=>renderStandings(tid));document.querySelector('#workcontent').innerHTML=`<small>BXH</small><h1>${esc(currentTournament.name)}</h1>${data.map(x=>`<div class="panel standings"><h2>Bảng ${esc(x.group.name)}</h2><table><tr><th>#</th><th>Đội</th><th>Trận</th><th>W</th><th>L</th><th>+</th><th>-</th><th>+/-</th></tr>${x.rows.map((r,i)=>`<tr><td>${i+1}</td><td>${esc(r.name)}</td><td>${r.p}</td><td>${r.w}</td><td>${r.l}</td><td>${r.pf}</td><td>${r.pa}</td><td>${r.diff>0?'+':''}${r.diff}</td></tr>`).join('')}</table></div>`).join('')||'<div class="panel">Chưa chia bảng.</div>'}`}
-async function renderKnockout(tid){const epoch=renderEpoch,event={...activeEvent};await renderManagedKnockout({client:supabase,event,host:document.querySelector('#workcontent'),standingsData:()=>standingsData(tid),isCurrent:()=>epoch===renderEpoch&&activeEvent?.id===event.id,mountCourt:(host,match,db)=>mountCourtSelect(host,match,db,tid),mountLive:()=>{if(epoch===renderEpoch&&activeEvent?.id===event.id)mountPublicVideo({tournament_id:tid,event_id:event.id})}})}
+async function renderKnockout(tid){const epoch=renderEpoch,event={...activeEvent};await renderManagedKnockout({client:supabase,event,host:document.querySelector('#workcontent'),standingsData:()=>standingsData(tid),isCurrent:()=>epoch===renderEpoch&&activeEvent?.id===event.id,mountCourt:(host,match,db)=>mountCourtSelect(host,match,db,tid),mountLive:matches=>{
+  if(epoch!==renderEpoch||activeEvent?.id!==event.id)return;
+  if(['admin','staff'].includes(String(profile?.role).toLowerCase()))for(const match of matches){
+    const card=document.querySelector(`#workcontent [data-knockout-match="${match.id}"]`);if(!card)continue;
+    const button=document.createElement('button');button.type='button';button.className='secondary video-enable';button.textContent='Bật LIVE';
+    card.append(button);
+    button.onclick=async()=>{button.disabled=true;try{const {showBroadcasterQR}=await import('./video-ui.js');await showBroadcasterQR(supabase,match.id)}catch(error){alert(error.message)}finally{button.disabled=false}};
+  }
+  mountPublicVideo({tournament_id:tid,event_id:event.id});
+}})}
 function stageLabel(s){return ({playoff:'Playoff',round_of_16:'1/16',quarterfinal:'Tứ kết',semifinal:'Bán kết',final:'Chung kết'})[s]||s}
 async function slotsModal(t){
  const db=competitionClient(supabase,activeEvent),epoch=renderEpoch;

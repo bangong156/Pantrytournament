@@ -77,7 +77,7 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
         };
       }
     }
-    mountLive();
+    mountLive(managed&&event.format==='doubles'?matches.filter(m=>m.team1_id&&m.team2_id):[]);
     if(event.format!=='doubles'){controls.textContent='MLP knockout chưa được bật. MLP hiện tại tiếp tục hoạt động như trước.';return}
     if(started){controls.textContent='Knockout đã bắt đầu. Không thể tạo lại nhánh.';return}
     if(matches.length&&!managed){controls.textContent='Nhánh cũ chưa được quản lý. Không tự động thay thế hoặc nhận nhánh cũ.';return}
