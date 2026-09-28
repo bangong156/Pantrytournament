@@ -1,3 +1,4 @@
+import { ORGANIZER_EXPIRED, organizerFetch, organizerValid, organizerManages } from './organizer-access.js'
 import { renderManagedKnockout, publicBracket } from './knockout-ui.js'
 import { courtLabel, courtOptions, assignCourt, courtConflictMessage } from './match-courts.js'
 import { validMatches, nextMatch, matchStatus, summaryText, eventState } from './spectator.js'
@@ -10,8 +11,35 @@ import { createClient } from '@supabase/supabase-js'
 import './style.css'
 import pantryLogo from './assets/the-pantry-logo.png'
 const pantryLogoMarkup=(className)=>`<img class="pantry-logo ${className}" src="${pantryLogo}" alt="The Pantry">`
-const supabase=createClient('https://duuklzzxpegptsarcbqq.supabase.co','sb_publishable_FmGKX67AD3M4QvCuL3dSyg_w0X5vIX9')
+const supabase=createClient('https://duuklzzxpegptsarcbqq.supabase.co','sb_publishable_FmGKX67AD3M4QvCuL3dSyg_w0X5vIX9',{global:{fetch:organizerFetch(()=>String(profile?.role||'').toLowerCase(),()=>setTimeout(()=>organizerBlocked(),0))}})
 const app=document.querySelector('#app'); let activeEvent=null, tournamentEvents=[], session=null, profile=null, currentTournament=null, liveTimer=null, liveView=null, liveBusy=false, renderEpoch=0, discoveryTimer=null;
+let organizerState=null, organizerTimer=null, managementTournamentId=null;
+const isOrganizer=()=>String(profile?.role||'').toLowerCase()==='organizer';
+const organizerAccess=tid=>isOrganizer()&&organizerManages(organizerState,tid);
+const canOperate=tid=>['admin','staff'].includes(String(profile?.role||'').toLowerCase())||organizerAccess(tid);
+async function loadOrganizerState(){
+ const {data,error}=await supabase.rpc('organizer_access_state');if(error)throw error;
+ organizerState=data;return data;
+}
+function organizerBlocked(message=ORGANIZER_EXPIRED){
+ if(!isOrganizer())return;
+ stopLive();renderEpoch++;managementTournamentId=null;
+ app.innerHTML=`<main class="wrap"><h1>GIẢI CỦA TÔI</h1><p role="alert">${esc(message)}</p><button id="organizerRetry">Kiểm tra lại quyền</button><button class="ghost" id="organizerPublic">Xem giải công khai</button><button class="ghost" id="organizerLogout">Đăng xuất</button></main>`;
+ document.querySelector('#organizerRetry').onclick=dashboard;
+ document.querySelector('#organizerPublic').onclick=publicDashboard;
+ document.querySelector('#organizerLogout').onclick=async()=>{await supabase.auth.signOut();session=null;profile=null;render()};
+}
+function watchOrganizerAccess(){
+ clearInterval(organizerTimer);if(!isOrganizer())return;
+ organizerTimer=setInterval(async()=>{
+  if(!isOrganizer()){clearInterval(organizerTimer);return}
+  if(!document.querySelector('.workspace,#tournamentCards'))return;
+  try{await loadOrganizerState();if(!organizerValid(organizerState))organizerBlocked();
+    else if(managementTournamentId&&!organizerAccess(managementTournamentId))organizerBlocked('Bạn không còn được phân công vận hành giải đấu này.');
+    else if(document.querySelector('#new'))document.querySelector('#new').hidden=!organizerState.account.can_create_tournaments;
+  }catch{organizerBlocked('Không thể xác minh quyền vận hành. Vui lòng thử lại.');}
+ },15000);
+}
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 function registrationLink(value){
  const input=String(value||'').trim();
@@ -37,6 +65,10 @@ async function restoreRefereeSession(){
  return false;
 }
 async function getOrCreatePlayer(fullName, gender=null){
+  if(isOrganizer()){
+    const {data,error}=await supabase.rpc('organizer_roster_player',{p_tournament:activeEvent?.tournament_id,p_name:fullName,p_gender:gender}).single();
+    if(error)throw error;return data;
+  }
   const name=String(fullName||'').trim();
   if(!name) throw new Error('Tên VĐV không được để trống.');
   const {data:existing,error:findError}=await supabase.from('players').select('*').eq('full_name',name).limit(1);
@@ -327,12 +359,21 @@ async function refereeMlpModal(tid,token,match,tm){const db=competitionClient(su
 
 function login(){stopLive();renderEpoch++;app.innerHTML=`<main class="login"><section><button class="ghost public-login-back" id="loginBack">← Xem giải đấu</button><div class="brand">THE PANTRY</div><h1>Tournament Manager</h1><p>Vận hành giải đấu & minigame pickleball.</p><form id="login"><label>Email<input name="email" type="email" required></label><label>Mật khẩu<input name="password" type="password" required></label><button>Đăng nhập</button><div id="msg"></div></form></section></main>`;document.querySelector('#loginBack').onclick=publicDashboard;document.querySelector('#login').onsubmit=async e=>{e.preventDefault();let f=new FormData(e.target);let {error}=await supabase.auth.signInWithPassword({email:f.get('email'),password:f.get('password')});if(error)return document.querySelector('#msg').textContent=error.message;boot()}}
 async function dashboard(){
- stopLive();const epoch=++renderEpoch;
- const {data:t}=await supabase.from('tournaments').select('*').order('start_date',{ascending:false});if(epoch!==renderEpoch)return;
+ stopLive();const epoch=++renderEpoch;managementTournamentId=null;
+ if(isOrganizer()){
+  try{await loadOrganizerState();if(epoch!==renderEpoch)return;if(!organizerValid(organizerState))return organizerBlocked();}
+  catch(error){return organizerBlocked(error.message)}
+  watchOrganizerAccess();
+ }
+ let query=supabase.from('tournaments').select('*').order('start_date',{ascending:false});
+ if(isOrganizer()){const ids=[...new Set([...organizerState.owned_ids,...organizerState.assigned_ids])];query=query.in('id',ids.length?ids:['00000000-0000-0000-0000-000000000000'])}
+ const {data:t,error:dashboardError}=await query;if(epoch!==renderEpoch)return;
+ if(dashboardError&&isOrganizer())return organizerBlocked(dashboardError.message);
  const isAdmin=String(profile?.role||'').toLowerCase()==='admin';
- app.innerHTML=`<header class="dashboard-header"><div class="pantry-header-brand">${pantryLogoMarkup('pantry-logo-dashboard')}<span>Tournament Manager</span></div><div class="dashboard-account">${esc(profile?.full_name)} · ${esc(profile?.role)} <button class="ghost" id="logout">Đăng xuất</button></div></header><main class="wrap"><div class="hero"><div><small>CONTROL CENTER</small><h1>Giải đấu & Minigame</h1><p>Tạo giải, import VĐV, chia bảng và nhập kết quả tại một nơi.</p></div><button id="new">＋ Tạo giải</button></div><div id="dashboardMsg" class="dashboard-message" role="status"></div><div class="cards" id="tournamentCards">${(t||[]).map(x=>`<article class="card tournament-card" data-id="${x.id}"><div class="pill">${x.event_type==='minigame'?'MINIGAME':'GIẢI ĐẤU'}</div><h3>${esc(x.name)}</h3><p>${x.format==='mlp'?'Đồng đội / MLP':'Đánh đôi'} · ${esc(x.start_date)}</p><strong>${esc(x.status)}</strong>${isAdmin?`<button class="tournament-delete" data-delete-tournament="${x.id}" aria-label="Xóa giải ${esc(x.name)}">Xóa giải</button>`:''}</article>`).join('')||'<div class="empty">Chưa có giải nào. Tạo giải đầu tiên để bắt đầu.</div>'}</div></main><div id="modal"></div>`;
- document.querySelector('#logout').onclick=async()=>{await supabase.auth.signOut();session=null;render()};
- document.querySelector('#new').onclick=createModal;
+ app.innerHTML=`<header class="dashboard-header"><div class="pantry-header-brand">${pantryLogoMarkup('pantry-logo-dashboard')}<span>Tournament Manager</span></div><div class="dashboard-account">${esc(profile?.full_name)} · ${esc(profile?.role)} <button class="ghost" id="logout">Đăng xuất</button></div></header><main class="wrap"><div class="hero"><div><small>CONTROL CENTER</small><h1>${isOrganizer()?'GIẢI CỦA TÔI':'Giải đấu & Minigame'}</h1>${isOrganizer()?`<p>Quyền vận hành đến: ${esc(new Date(organizerState.account.expires_at).toLocaleString('vi-VN'))}</p>`:''}<p>Tạo giải, import VĐV, chia bảng và nhập kết quả tại một nơi.</p></div>${!isOrganizer()||organizerState.account.can_create_tournaments?'<button id="new">＋ Tạo giải</button>':''}</div><div id="dashboardMsg" class="dashboard-message" role="status"></div><div class="cards" id="tournamentCards">${(t||[]).map(x=>`<article class="card tournament-card" data-id="${x.id}"><div class="pill">${x.event_type==='minigame'?'MINIGAME':'GIẢI ĐẤU'}</div><h3>${esc(x.name)}</h3>${isOrganizer()?`<small>${x.owner_user_id===session.user.id?'TỰ TẠO':'ĐƯỢC CHỈ ĐỊNH'}</small>`:''}<p>${x.format==='mlp'?'Đồng đội / MLP':'Đánh đôi'} · ${esc(x.start_date)}</p><strong>${esc(x.status)}</strong>${isAdmin?`<button class="tournament-delete" data-delete-tournament="${x.id}" aria-label="Xóa giải ${esc(x.name)}">Xóa giải</button>`:''}</article>`).join('')||'<div class="empty">Chưa có giải nào. Tạo giải đầu tiên để bắt đầu.</div>'}</div></main><div id="modal"></div>`;
+ document.querySelector('#logout').onclick=async()=>{await supabase.auth.signOut();session=null;profile=null;organizerState=null;clearInterval(organizerTimer);render()};
+ if(document.querySelector('#new'))document.querySelector('#new').onclick=createModal;
+ if(isAdmin){const section=document.createElement('section');section.className='panel';document.querySelector('main').append(section);const {mountGuestAccounts}=await import('./organizer-ui.js');if(epoch===renderEpoch)await mountGuestAccounts(supabase,section)}
  document.querySelectorAll('.tournament-card').forEach(c=>c.onclick=()=>workspace(c.dataset.id));
  if(isAdmin)document.querySelectorAll('[data-delete-tournament]').forEach(b=>b.onclick=e=>{
   e.stopPropagation();
@@ -370,6 +411,7 @@ function deleteTournamentModal(tournament){
 
 function mlpStyleFields(){return `<div class="mlpbox"><p class="label">Style MLP</p><div class="formats mlp-styles"><label><input type="radio" name="mlp_style" value="basic" checked><span><b>MLP Cơ bản</b><small>4 VĐV · 2 Nam + 2 Nữ</small></span></label><label><input type="radio" name="mlp_style" value="mini"><span><b>MLP Mini</b><small>3 VĐV · Không phân giới tính</small></span></label></div><div class="mlp-style-note" id="mlpStyleNote">Excel: Tên đội · Nam 1 · Nam 2 · Nữ 1 · Nữ 2</div></div>`}
 function createModal(){
+ if(isOrganizer()&&(!organizerValid(organizerState)||!organizerState.account.can_create_tournaments))return organizerBlocked(!organizerValid(organizerState)?ORGANIZER_EXPIRED:'Tài khoản chưa được phép tự tạo giải.');
  const epoch=renderEpoch;
  document.querySelector('#modal').innerHTML=`<div class="overlay"><form class="modal" id="create"><div class="modalhead"><div><small>TẠO WORKSPACE</small><h2>Tạo giải mới</h2></div><button type="button" class="x">×</button></div><label>Tên giải / Minigame<input name="name" required></label><div class="twocol"><label>Loại<select name="event_type"><option value="tournament">Giải đấu</option><option value="minigame">Minigame</option></select></label><label>Ngày bắt đầu<input name="start_date" type="date" required></label></div><label>Giờ bắt đầu giải<input name="start_time" type="time"></label><p class="label">Format thi đấu</p><div class="formats"><label><input type="radio" name="format" value="doubles" checked><span><b>👥 Đánh đôi</b><small>2 VĐV / đội</small></span></label><label><input type="radio" name="format" value="mlp"><span><b>🛡 Đồng đội / MLP</b><small>Chọn style MLP</small></span></label></div><div id="mlp"></div><label><span id="expectedLabel">Số cặp VĐV dự kiến</span><input name="expected_team_count" type="number" min="1" step="1"></label><button class="wide">Tạo giải</button><div id="msg" role="alert"></div></form></div>`;
  const form=document.querySelector('#create');form.querySelector('.x').onclick=()=>document.querySelector('#modal').innerHTML='';
@@ -408,7 +450,7 @@ function publicEventSelector(){
  return `<nav class="competition-tabs" aria-label="Nội dung giải">${tournamentEvents.map(e=>`<button class="${e.id===activeEvent.id?'':'secondary'}" data-public-event="${e.id}" aria-pressed="${e.id===activeEvent.id}">${esc(e.name)}</button>`).join('')}</nav>`;
 }
 function competitionEventCards(t){
- const canManage=['admin','staff'].includes(String(profile?.role||'').toLowerCase());
+ const canManage=canOperate(t.id);
  return `<section class="competition-events"><div class="toolbar"><div><h2>NỘI DUNG GIẢI</h2><p>${esc(displayEventDate(t.start_date))}${t.start_time?' • '+esc(t.start_time.slice(0,5)):''}</p></div>${canManage?'<button id="addCompetitionEvent">＋ Thêm nội dung</button>':''}</div><div class="competition-grid">${tournamentEvents.map(e=>`<article class="panel competition-card ${e.id===activeEvent.id?'competition-active':''}"><h3>${esc(e.name)}</h3><p>${e.start_time?esc(e.start_time.slice(0,5)):'Chưa có giờ dự kiến'} · ${eventFormat(e)}</p>${e.expected_team_count?`<p>${e.expected_team_count} ${e.format==='mlp'?'đội':'cặp'} dự kiến</p>`:''}<button data-open-event="${e.id}" class="${e.id===activeEvent.id?'':'secondary'}">${e.id===activeEvent.id?'Đang quản lý':'→ Quản lý nội dung'}</button>${canManage?`<div class="actions"><button class="ghost" data-edit-event="${e.id}">Sửa nội dung</button><button class="danger" data-delete-event="${e.id}" ${tournamentEvents.length===1?'disabled':''}>Xóa nội dung</button></div>`:''}</article>`).join('')}</div><p class="event-context">${esc(t.name)} → <strong>${esc(activeEvent.name)}</strong></p></section>`;
 }
 function bindCompetitionEvents(t,tab){
@@ -440,6 +482,13 @@ function competitionEventModal(t,event=null){
 
 async function workspace(id,tab='overview',eventId=null){
   stopLive();const epoch=++renderEpoch;
+  if(isOrganizer()){
+    try{await loadOrganizerState();if(epoch!==renderEpoch)return;
+      if(!organizerValid(organizerState))return organizerBlocked();
+      if(!organizerAccess(id))return organizerBlocked('Bạn không có quyền vận hành giải đấu này.');
+    }catch(error){return organizerBlocked(error.message)}
+    managementTournamentId=id;watchOrganizerAccess();
+  }
   app.innerHTML='<main class="wrap"><p role="status">Đang tải nội dung giải…</p></main>';
   let {data:t}=await supabase.from('tournaments').select('*').eq('id',id).single(); if(epoch!==renderEpoch)return;if(!t)return dashboard();
   if(!await loadCompetitionEvents(t,eventId,epoch))return;
@@ -460,7 +509,7 @@ async function renderTournamentInfoEditor(t,{preserveOnError=false}={}){
  const {data:info,error}=await supabase.from('tournament_info').select('content,prize_information,rules,poster_path,registration_url').eq('tournament_id',t.id).maybeSingle();
  if(epoch!==renderEpoch)return false;
  if(error){if(!preserveOnError)area.innerHTML=`<div class="panel">${esc(error.message)}</div>`;return false}
- const isAdmin=String(profile?.role||'').toLowerCase()==='admin',image=posterUrl(t.id,info?.poster_path);
+ const isAdmin=String(profile?.role||'').toLowerCase()==='admin'||organizerAccess(t.id),image=posterUrl(t.id,info?.poster_path);
  area.innerHTML=`<section class="info-editor"><div class="page-kicker">TRANG SỰ KIỆN CÔNG KHAI</div><h1>Thông tin giải</h1><p class="muted">Nội dung này xuất hiện trên trang Thông tin giải.</p><div class="panel"><h2>POSTER GIẢI</h2><div id="posterPreview" class="editor-poster">${image?`<img src="${esc(image)}" alt="Poster hiện tại">`:'<p>Chưa có poster.</p>'}</div>${isAdmin?'<label>Chọn poster mới<input id="posterUpload" type="file" accept="image/jpeg,image/png,image/webp"></label><button type="button" class="secondary" id="removePoster">Gỡ poster</button>':''}</div><div class="panel"><label>NỘI DUNG GIẢI<textarea id="eventContent" rows="7" ${isAdmin?'':'readonly'} placeholder="Giới thiệu và nội dung giải">${esc(info?.content||'')}</textarea></label><label>GIẢI THƯỞNG<textarea id="eventPrizes" rows="5" ${isAdmin?'':'readonly'} placeholder="Thông tin giải thưởng">${esc(info?.prize_information||'')}</textarea></label><label>QUY ĐỊNH<textarea id="eventRules" rows="7" ${isAdmin?'':'readonly'} placeholder="Thể lệ và quy định">${esc(info?.rules||'')}</textarea></label><label>LINK ĐĂNG KÝ<input id="eventRegistration" type="text" inputmode="url" ${isAdmin?'':'readonly'} value="${esc(info?.registration_url||'')}" placeholder="Dán link nhóm Zalo hoặc link đăng ký"></label><p class="info-registration-help">Khách sẽ được chuyển đến link này khi bấm Đăng ký ngay.</p>${isAdmin?'<button id="saveEventInfo">Lưu thông tin giải</button>':''}<p id="eventInfoMessage" role="status"></p></div></section>`;
  if(!isAdmin)return true;
  const savedInfo=info||{poster_path:null};
@@ -544,7 +593,7 @@ function awardShowcase(awards){
 async function renderAwards(tid,teams,roster=null){const db=competitionClient(supabase,activeEvent);
  const epoch=renderEpoch;
  const awardsRequest=db.from('tournament_awards').select('placement,placement_slot,team_id,team_name,player_names').eq('tournament_id',tid).order('placement').order('placement_slot');
- const isAdmin=String(profile?.role||'').toLowerCase()==='admin';
+ const isAdmin=String(profile?.role||'').toLowerCase()==='admin'||organizerAccess(tid);
  const memberRequest=isAdmin&&!roster&&teams.length?db.from('team_members').select('team_id,player_id,slot_order').in('team_id',teams.map(t=>t.id)):Promise.resolve({data:[]});
  const [{data:awards,error},{data:members,error:memberError}]=await Promise.all([awardsRequest,memberRequest]);
  if(epoch!==renderEpoch)return;
@@ -828,7 +877,7 @@ async function openMlpMatch(match,tm,tid){const db=competitionClient(supabase,ac
   });
 }
 function mountCourtSelect(host,match,db,tid){
- if(!match||!['admin','staff'].includes(String(profile?.role).toLowerCase()))return;
+ if(!match||!canOperate(tid))return;
  const select=document.createElement('select');select.className='match-court-select';
  select.setAttribute('aria-label',`Sân cho trận ${match.match_code}`);
  select.innerHTML='<option value="">Chưa xếp sân</option>'+courtOptions(match.court_number).map(n=>`<option value="${n}">Sân ${n}</option>`).join('');
@@ -862,7 +911,7 @@ async function renderMatches(tid){const db=competitionClient(supabase,activeEven
     const match=(matches||[]).find(m=>String(m.id)===host.dataset.groupCourt);
     mountCourtSelect(host,match,db,tid);
   });
-  if(['admin','staff'].includes(String(profile?.role).toLowerCase())){
+  if(canOperate(tid)){
     document.querySelectorAll('[data-save],[data-open-mlp]').forEach(control=>{
       const button=document.createElement('button');button.type='button';button.className='secondary video-enable';button.textContent='Bật LIVE';
       const matchId=control.dataset.save||control.dataset.openMlp;
@@ -879,7 +928,7 @@ async function standingsData(tid){const db=competitionClient(supabase,activeEven
 
 async function renderRefereeAdmin(tid){const db=competitionClient(supabase,activeEvent);
  const epoch=renderEpoch;
- const isAdmin=String(profile?.role||'').toLowerCase()==='admin';
+ const isAdmin=String(profile?.role||'').toLowerCase()==='admin'||organizerAccess(tid);
  const [{data:groups},{data:codes},{data:sessions},{data:logs},{data:matches},adminCodes]=await Promise.all([
   db.from('groups').select('id,name,group_order').eq('tournament_id',tid).order('group_order'),
   db.from('referee_access_codes').select('id,group_id,active,expires_at').eq('tournament_id',tid),
@@ -913,7 +962,7 @@ function refereeCodeModal(tid,g){
 async function renderStandings(tid){const epoch=renderEpoch;let data=await standingsData(tid);if(epoch!==renderEpoch)return;startLive(`admin:standings:${tid}`,()=>renderStandings(tid));document.querySelector('#workcontent').innerHTML=`<small>BXH</small><h1>${esc(currentTournament.name)}</h1>${data.map(x=>`<div class="panel standings"><h2>Bảng ${esc(x.group.name)}</h2><table><tr><th>#</th><th>Đội</th><th>Trận</th><th>W</th><th>L</th><th>+</th><th>-</th><th>+/-</th></tr>${x.rows.map((r,i)=>`<tr><td>${i+1}</td><td>${esc(r.name)}</td><td>${r.p}</td><td>${r.w}</td><td>${r.l}</td><td>${r.pf}</td><td>${r.pa}</td><td>${r.diff>0?'+':''}${r.diff}</td></tr>`).join('')}</table></div>`).join('')||'<div class="panel">Chưa chia bảng.</div>'}`}
 async function renderKnockout(tid){const epoch=renderEpoch,event={...activeEvent};await renderManagedKnockout({client:supabase,event,host:document.querySelector('#workcontent'),standingsData:()=>standingsData(tid),isCurrent:()=>epoch===renderEpoch&&activeEvent?.id===event.id,mountCourt:(host,match,db)=>mountCourtSelect(host,match,db,tid),mountLive:matches=>{
   if(epoch!==renderEpoch||activeEvent?.id!==event.id)return;
-  if(['admin','staff'].includes(String(profile?.role).toLowerCase()))for(const match of matches){
+  if(canOperate(tid))for(const match of matches){
     const card=document.querySelector(`#workcontent [data-knockout-match="${match.id}"]`);if(!card)continue;
     const button=document.createElement('button');button.type='button';button.className='secondary video-enable';button.textContent='Bật LIVE';
     card.append(button);

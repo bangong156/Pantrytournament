@@ -44,7 +44,7 @@ export function createHandler(getDependencies=dependencies){
       try{payload=JSON.parse(body);}catch{throw new VideoError(400,'Yêu cầu không hợp lệ.');}
       const {repository,stream,box}=getDependencies();
       operation='authentication';
-      const userId=await repository.staff(token);
+      const userId=await repository.staff(token,payload?.match_id);
       operation='database';
       await repository.rate(`video-create:${userId}`,10);
       const match=await requireVideoMatch(repository,payload?.match_id);

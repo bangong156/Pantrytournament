@@ -13,6 +13,7 @@ export async function handler(event){
     const {repository,stream,box}=dependencies();
     const row=await repository.get(body.session_id);
     if(!row||!matchesToken(body.token,row.invite_hash))throw new VideoError(403,'Liên kết LIVE không hợp lệ.');
+    if(body.action!=='stop')await repository.authorizePublisher(row);
     await repository.rate(`video-broadcast:${row.id}`,20);
     if(body.action==='heartbeat'){
       if(!['connecting','live'].includes(row.status)||!(Date.parse(row.lease_expires_at)>Date.now())||!(Date.parse(row.hard_expires_at)>Date.now()))throw new VideoError(410,'Phiên LIVE đã hết hạn. Hãy tạo QR mới.');

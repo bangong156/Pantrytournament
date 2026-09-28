@@ -1,5 +1,5 @@
 import {createClient} from '@supabase/supabase-js';
-import {VideoError,digest} from './video-security.js';
+import {VideoError,digest,validUUID} from './video-security.js';
 export function videoRepository({url,key}){
   const db=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
   const check=({data,error,status},operation)=>{
@@ -10,14 +10,29 @@ export function videoRepository({url,key}){
     return data;
   };
   return {
-    async staff(token){
+    async staff(token,matchId){
       const {data,error}=await db.auth.getUser(token);
       if(error||!data?.user)throw new VideoError(401,'Vui lòng đăng nhập lại.');
       const result=await db.from('profiles').select('role').eq('id',data.user.id).maybeSingle();
       if(result.error)console.error({code:result.error.code,status:result.status});
       const p=check(result);
-      if(!['admin','staff'].includes(String(p?.role).toLowerCase()))throw new VideoError(403,'Chỉ Admin / Staff được quản lý LIVE.');
+      if(String(p?.role).toLowerCase()==='organizer'){
+        if(!validUUID(matchId))throw new VideoError(400,'Mã trận đấu không hợp lệ.');
+        const match=check(await db.from('matches').select('tournament_id').eq('id',matchId).maybeSingle());
+        if(!match)throw new VideoError(404,'Trận đấu không còn tồn tại.');
+        const access=await db.rpc('organizer_video_access',{p_user:data.user.id,p_tournament:match.tournament_id});
+        if(access.error)throw new VideoError(access.error.code==='42501'?403:503,access.error.message);
+        if(!access.data)throw new VideoError(403,'Bạn không có quyền vận hành giải đấu này.');
+      }else if(!['admin','staff'].includes(String(p?.role).toLowerCase()))throw new VideoError(403,'Chỉ Admin / Staff được quản lý LIVE.');
       return data.user.id;
+    },
+    async authorizePublisher(row){
+      if(!row.created_by)return;
+      const role=check(await db.from('profiles').select('role').eq('id',row.created_by).maybeSingle());
+      if(String(role?.role).toLowerCase()!=='organizer')return;
+      const access=await db.rpc('organizer_video_access',{p_user:row.created_by,p_tournament:row.tournament_id});
+      if(access.error)throw new VideoError(access.error.code==='42501'?403:503,access.error.message);
+      if(!access.data)throw new VideoError(403,'Bạn không có quyền vận hành giải đấu này.');
     },
     async rate(key,limit){if(!check(await db.rpc('match_video_take_rate',{p_key:digest(key),p_limit:limit}),'rate'))throw new VideoError(429,'Quá nhiều yêu cầu. Vui lòng đợi một phút.');},
     async match(id){return check(await db.from('matches').select('id,event_id,tournament_id,match_code,team1_id,team2_id').eq('id',id).maybeSingle(),'match');},
