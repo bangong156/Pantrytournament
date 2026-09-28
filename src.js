@@ -1,3 +1,4 @@
+import { mountOperations, readinessBadge } from './operations.js'
 import { ORGANIZER_EXPIRED, organizerFetch, organizerValid, organizerManages } from './organizer-access.js'
 import { renderManagedKnockout, publicBracket } from './knockout-ui.js'
 import { courtLabel, courtOptions, assignCourt, courtConflictMessage } from './match-courts.js'
@@ -482,6 +483,7 @@ function competitionEventModal(t,event=null){
 }
 
 async function workspace(id,tab='overview',eventId=null){
+  if(['checkin','control'].includes(tab)&&!canOperate(id))return;
   stopLive();const epoch=++renderEpoch;
   if(isOrganizer()){
     try{await loadOrganizerState();if(epoch!==renderEpoch)return;
@@ -497,10 +499,23 @@ async function workspace(id,tab='overview',eventId=null){
   const tournament=t;t={...t,format:activeEvent.format,status:activeEvent.status,expected_team_count:activeEvent.expected_team_count};currentTournament=t;
   const {data:teams}=await db.from('teams').select('*').eq('tournament_id',id).order('registration_order');
   if(epoch!==renderEpoch)return;
-  app.innerHTML=`<header class="workspace-header"><div><button class="ghost" id="back">← Dashboard</button>${pantryLogoMarkup('pantry-logo-small')}<b>${esc(t.name)} → ${esc(activeEvent.name)}</b></div><div>${t.format==='mlp'?'MLP':'ĐÁNH ĐÔI'} · ${esc(t.start_date)}</div></header><main class="wrap ${tab==='matches'?'match-control-page':''}">${competitionEventCards(tournament)}<div class="workspace"><aside>${navButton('overview','Tổng quan',tab)}${navButton('info','Thông tin giải',tab)}${navButton('teams','VĐV / Đội',tab)}${navButton('groups','Chia bảng',tab)}${navButton('matches','Trận đấu',tab)}${navButton('standings','BXH',tab)}${navButton('referees','Trọng tài',tab)}${navButton('knockout','Knockout',tab)}${navButton('awards','🏆 Vinh danh',tab)}</aside><section id="workcontent"></section></div></main><div id="modal"></div>`;
+  app.innerHTML=`<header class="workspace-header"><div><button class="ghost" id="back">← Dashboard</button>${pantryLogoMarkup('pantry-logo-small')}<b>${esc(t.name)} → ${esc(activeEvent.name)}</b></div><div>${t.format==='mlp'?'MLP':'ĐÁNH ĐÔI'} · ${esc(t.start_date)}</div></header><main class="wrap ${tab==='matches'?'match-control-page':''}">${competitionEventCards(tournament)}<div class="workspace"><aside>${navButton('overview','Tổng quan',tab)}${navButton('info','Thông tin giải',tab)}${navButton('teams','VĐV / Đội',tab)}${navButton('groups','Chia bảng',tab)}${canOperate(id)?navButton('checkin','CHECK-IN',tab)+navButton('control','ĐIỀU HÀNH',tab):''}${navButton('matches','Trận đấu',tab)}${navButton('standings','BXH',tab)}${navButton('referees','Trọng tài',tab)}${navButton('knockout','Knockout',tab)}${navButton('awards','🏆 Vinh danh',tab)}</aside><section id="workcontent"></section></div></main><div id="modal"></div>`;
   document.querySelector('#back').onclick=dashboard;
   bindCompetitionEvents(tournament,tab);
   document.querySelectorAll('aside button[data-tab]').forEach(b=>b.onclick=()=>workspace(id,b.dataset.tab));
+  if(['checkin','control'].includes(tab))await mountOperations({
+    client:supabase,event:{...activeEvent},tournament:t,tab,allowed:()=>canOperate(id),
+    isCurrent:()=>epoch===renderEpoch,startLive,getPlayer:getOrCreatePlayer,
+    openMatch:async match=>{
+      if(epoch!==renderEpoch||!canOperate(id))return;
+      const eventId=db.event.id;
+      await workspace(id,match.stage==='group'?'matches':'knockout',eventId);
+      if(activeEvent?.id!==eventId)return;
+      const card=document.querySelector(`[data-match-row="${match.id}"], [data-group-court="${match.id}"], [data-knockout-match="${match.id}"]`);
+      card?.scrollIntoView({block:'center',behavior:'smooth'});
+      card?.querySelector('button,input,select')?.focus({preventScroll:true});
+    }
+  });
   if(tab==='overview')await renderOverview(t,teams||[]); if(tab==='info')await renderTournamentInfoEditor(tournament); if(tab==='teams')await renderTeams(t,teams||[]); if(tab==='groups')await showGroups(id); if(tab==='matches')await renderMatches(id); if(tab==='standings')await renderStandings(id); if(tab==='referees')await renderRefereeAdmin(id); if(tab==='knockout')await renderKnockout(id); if(tab==='awards')await renderAwards(id,teams||[]);
 }
 function navButton(k,label,active){return `<button data-tab="${k}" class="${k===active?'nav-active':''}">${label}</button>`}
@@ -790,7 +805,7 @@ async function createGroupSchedule(tid){const db=competitionClient(supabase,acti
 }
 async function showGroups(tid){const db=competitionClient(supabase,activeEvent);const epoch=renderEpoch;
   const [{data:teams,error:te},{data:groups,error:ge}]=await Promise.all([
-    db.from('teams').select('id,name,registration_order').eq('tournament_id',tid).order('registration_order'),
+    db.from('teams').select('*').eq('tournament_id',tid).order('registration_order'),
     db.from('groups').select('*').eq('tournament_id',tid).order('group_order')
   ]);
   if(epoch!==renderEpoch)return;
@@ -807,7 +822,7 @@ async function showGroups(tid){const db=competitionClient(supabase,activeEvent);
   const maxGroups=Math.max(1,(teams||[]).length);
   document.querySelector('#workcontent').innerHTML=`<div class="page-kicker">CHIA BẢNG</div><div class="groups-title"><div><h1>${esc(currentTournament.name)}</h1><p>${teams.length} đội · Chọn số bảng, hệ thống tự chia đều.</p></div></div>
   <div class="panel group-control"><div class="group-control-main"><label>Số bảng<input id="groupCount" type="number" min="1" max="${maxGroups}" value="${Math.max(1,freshGroups.length)}"></label><div class="balance-preview">Phân bổ hiện tại: <b>${counts.length?counts.join(' · '):teams.length}</b> đội</div></div><div class="group-actions"><button id="divideGroups">🎲 Xáo & chia đều</button><button class="ghost" id="reshuffleGroups">Xáo lại</button><button id="lockGroups">✓ Chốt bảng & tạo lịch</button></div></div>
-  <div class="group-board">${freshGroups.map(g=>{const gl=links.filter(x=>x.group_id===g.id);return `<section class="group-column"><div class="group-column-head"><div><small>BẢNG</small><h2>${esc(g.name)}</h2></div><span>${gl.length} đội</span></div><div class="group-team-list">${gl.map((x,i)=>`<div class="group-team"><span class="team-index">${i+1}</span><b>${esc(tm[x.team_id]?.name||'Đội')}</b><select data-move-team="${x.team_id}" data-from="${g.id}" aria-label="Chuyển đội ${esc(tm[x.team_id]?.name||'')}">${freshGroups.map(dest=>`<option value="${dest.id}" ${dest.id===g.id?'selected':''}>Bảng ${esc(dest.name)}</option>`).join('')}</select></div>`).join('')||'<div class="group-empty">Chưa có đội</div>'}</div></section>`}).join('')}</div>`;
+  <div class="group-board">${freshGroups.map(g=>{const gl=links.filter(x=>x.group_id===g.id);return `<section class="group-column"><div class="group-column-head"><div><small>BẢNG</small><h2>${esc(g.name)}</h2></div><span>${gl.length} đội ${readinessBadge(gl.map(x=>tm[x.team_id]).filter(Boolean))}</span></div><div class="group-team-list">${gl.map((x,i)=>`<div class="group-team"><span class="team-index">${i+1}</span><b>${esc(tm[x.team_id]?.name||'Đội')}</b><select data-move-team="${x.team_id}" data-from="${g.id}" aria-label="Chuyển đội ${esc(tm[x.team_id]?.name||'')}">${freshGroups.map(dest=>`<option value="${dest.id}" ${dest.id===g.id?'selected':''}>Bảng ${esc(dest.name)}</option>`).join('')}</select></div>`).join('')||'<div class="group-empty">Chưa có đội</div>'}</div></section>`}).join('')}</div>`;
   const run=async(shuffle=true)=>{const b=document.querySelector(shuffle?'#divideGroups':'#reshuffleGroups');try{b.disabled=true;b.textContent='Đang chia…';await saveGroupDistribution(tid,+document.querySelector('#groupCount').value,(teams||[]).map(x=>x.id),true);if(epoch===renderEpoch)await showGroups(tid)}catch(e){alert(e.message);b.disabled=false}};
   document.querySelector('#divideGroups').onclick=()=>run(true);
   document.querySelector('#reshuffleGroups').onclick=()=>run(false);
