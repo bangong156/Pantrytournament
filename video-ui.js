@@ -1,5 +1,6 @@
 import QRCode from 'qrcode';
 import './video.css';
+import {competitionClient} from './event-scope.js';
 
 async function post(endpoint,body,token,signal){
   const response=await fetch(`/.netlify/functions/${endpoint}`,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify(body),signal});
@@ -49,13 +50,13 @@ function gatherIce(peer){
   });
 }
 
-export function renderBroadcaster(app){
+export function renderBroadcaster(app,client){
   const params=new URLSearchParams(location.hash.slice(1));
   const session_id=params.get('session'),token=params.get('token');
   app.innerHTML='<main class="broadcaster"><section class="broadcast-rotation" hidden role="status" aria-live="polite"><div class="broadcast-rotation-icon" aria-hidden="true">📱 ↻</div><h2></h2><p></p></section><small>THE PANTRY · LIVE</small><h1>Phát trực tiếp trận đấu</h1><p>Đặt điện thoại nằm ngang, hướng camera về sân. Giữ trang này mở khi phát.</p><video autoplay muted playsinline aria-label="Xem trước camera"></video><div class="broadcast-actions"><button id="camera">Cho phép camera & micro</button><button id="broadcast" disabled>Bắt đầu LIVE</button><button id="stopBroadcast" class="secondary" disabled>Dừng LIVE</button></div><p id="broadcastMessage" role="status" aria-live="polite"></p></main>';
   const video=app.querySelector('video'),camera=app.querySelector('#camera'),start=app.querySelector('#broadcast'),stop=app.querySelector('#stopBroadcast'),message=app.querySelector('#broadcastMessage');
   let media,peer,attempted=false,expiryTimer,heartbeatTimer,heartbeatRequest;
-  let cameraReady=false,broadcasting=false;
+  let cameraReady=false,broadcasting=false,matchScope;
   const rotation=app.querySelector('.broadcast-rotation');
   const phoneUsage=window.matchMedia('(pointer: coarse) and (hover: none) and (max-device-width: 767px), (pointer: coarse) and (hover: none) and (max-device-height: 767px)');
   const portrait=window.matchMedia('(orientation: portrait)');
@@ -86,6 +87,25 @@ export function renderBroadcaster(app){
     try{
       await post('video-broadcast',request('heartbeat'),null,controller.signal);
       if(peer===connection&&connection.connectionState==='connected')message.textContent='● Đang LIVE';
+      // Public discovery binds this broadcaster's exact session to its match.
+      // Status reads are best effort and never turn lookup failures into stops.
+      try{
+        if(!client||peer!==connection||connection.connectionState!=='connected')return;
+        if(!matchScope){
+          const response=await fetch('/.netlify/functions/video-playback?homepage=1',{cache:'no-store',signal:controller.signal});
+          if(!response.ok)return;
+          const result=await response.json();
+          const stream=result.streams?.find(row=>row.session_id===session_id);
+          const validId=value=>typeof value==='string'&&/^[0-9a-f-]{36}$/i.test(value);
+          if(!stream||![stream.match_id,stream.event_id,stream.tournament_id].every(validId))return;
+          matchScope=Object.freeze({match_id:stream.match_id,event_id:stream.event_id,tournament_id:stream.tournament_id});
+        }
+        if(peer!==connection||connection.connectionState!=='connected')return;
+        const db=competitionClient(client,{id:matchScope.event_id,tournament_id:matchScope.tournament_id});
+        const {data:match,error}=await db.from('matches').select('status').eq('id',matchScope.match_id).eq('tournament_id',matchScope.tournament_id).abortSignal(controller.signal).maybeSingle();
+        if(!error&&match?.status==='completed'&&peer===connection&&connection.connectionState==='connected')stop.click();
+      }catch{ /* Retry on a later heartbeat; lookup failures never stop LIVE. */ }
+
     }catch(error){
       if(peer!==connection)return;
       if([400,403,404,409,410].includes(error.status)){
