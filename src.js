@@ -125,7 +125,7 @@ async function publicDashboard(selectedCategory=null){
  if(epoch!==renderEpoch)return;
  const shown=category==='upcoming'?upcoming:completed;
  app.innerHTML=`<header class="public-header public-home-header"><div class="pantry-header-brand">${pantryLogoMarkup('pantry-logo-public')}<span>Tournament</span></div><div class="homepage-guide-actions"><button class="ghost" id="adminLogin">Admin / Staff</button></div></header><main class="wrap discovery-home"><section id="homepageLive" class="discovery-live-section" aria-label="Đang LIVE" hidden><h2>🔴 ĐANG LIVE</h2><div class="discovery-grid"></div></section><div class="hero public-hero"><div><small>THE PANTRY · LIVE TOURNAMENT</small><h1>Pantry đang có gì diễn ra?</h1><p>Khám phá giải đấu, lịch thi đấu và kết quả của The Pantry.</p></div></div>${live.length?`<section class="discovery-live-section" aria-label="Đang diễn ra"><h2><span class="live-dot"></span> ĐANG DIỄN RA</h2><div class="discovery-grid">${live.map(x=>discoveryCard(x,true,counts[x.id]||'')).join('')}</div></section>`:''}<section class="discovery-browse"><div class="discovery-tabs" role="tablist" aria-label="Danh sách giải"><button role="tab" aria-selected="${category==='upcoming'}" data-category="upcoming" class="${category==='upcoming'?'selected':''}">SẮP DIỄN RA <span>${upcoming.length}</span></button><button role="tab" aria-selected="${category==='completed'}" data-category="completed" class="${category==='completed'?'selected':''}">🏆 Giải đã kết thúc <span>${completed.length}</span></button></div><div class="discovery-grid" role="tabpanel">${shown.map(x=>discoveryCard(x)).join('')||`<p class="discovery-empty">${category==='upcoming'?'Chưa có giải sắp diễn ra.':'Chưa có giải đã kết thúc.'}</p>`}</div></section></main><div id="modal"></div>`;
- mountHomepageVideo();
+ mountHomepageVideo(supabase);
  document.querySelector('#adminLogin').onclick=login;
  document.querySelectorAll('[data-category]').forEach(b=>b.onclick=()=>publicDashboard(b.dataset.category));
  document.querySelectorAll('[data-hub]').forEach(b=>b.onclick=e=>{e.stopPropagation();publicTournament(b.dataset.hub)});
@@ -198,7 +198,7 @@ async function publicTournament(tid,tab='overview',eventId=null,detail=null){
   host.innerHTML=next?`<section class="spectator-next"><h2>TRẬN TIẾP THEO</h2><b>${esc(next.match_code)}</b><div class="spectator-next-teams"><strong>${esc(teamMap[next.team1_id])}</strong><span>vs</span><strong>${esc(teamMap[next.team2_id])}</strong></div><small>${courtLabel(next.court_number)||'ĐANG CHỜ SÂN'}</small></section>`:'';
  };
  renderNext();
- mountPublicVideo({tournament_id:tid,event_id:db.event.id},renderNext);
+ mountPublicVideo({tournament_id:tid,event_id:db.event.id},renderNext,supabase);
 }
 function publicLinkError(tid){
  app.innerHTML=`<main class="wrap spectator-detail"><h1>Không tìm thấy nội dung</h1><p>Liên kết trận hoặc đội cần đúng nội dung thi đấu.</p><a href="${esc(competitionURL(tid))}">← XEM TOÀN BỘ GIẢI</a></main>`;
@@ -228,7 +228,7 @@ async function renderPublicDetail(tournament,event,detail,epoch){
  app.innerHTML=`<main class="wrap spectator-detail">${spectatorDetail({tournament,event,...data,matchId:detail.match,teamId:detail.team})}</main><div id="modal"></div>`;
  bindPublicMatchActions(tournament.id,event.id,tournament.name+' · '+event.name);
  startLive(`public:${tournament.id}:${event.id}:detail`,()=>publicTournament(tournament.id,'matches',event.id,detail));
- mountPublicVideo({tournament_id:tournament.id,event_id:event.id});
+ mountPublicVideo({tournament_id:tournament.id,event_id:event.id},undefined,supabase);
 }
 function publicTeamButton(id,name){
  return id?`<button class="public-hub-team-link" data-public-team="${id}">${esc(name||'TBD')}</button>`:`<span>${esc(name||'TBD')}</span>`;
@@ -996,7 +996,7 @@ async function renderKnockout(tid){const epoch=renderEpoch,event={...activeEvent
     card.append(button);
     button.onclick=async()=>{button.disabled=true;try{const {showBroadcasterQR}=await import('./video-ui.js');await showBroadcasterQR(supabase,match.id)}catch(error){alert(error.message)}finally{button.disabled=false}};
   }
-  mountPublicVideo({tournament_id:tid,event_id:event.id});
+  mountPublicVideo({tournament_id:tid,event_id:event.id},undefined,supabase);
 }})}
 function stageLabel(s){return ({playoff:'Playoff',round_of_16:'1/16',quarterfinal:'Tứ kết',semifinal:'Bán kết',final:'Chung kết'})[s]||s}
 async function slotsModal(t){

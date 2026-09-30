@@ -1,4 +1,5 @@
 import './video-playback.css';
+import {competitionClient} from './event-scope.js';
 
 let dispose=()=>{};
 export function stopPublicVideo(){dispose();dispose=()=>{};}
@@ -20,7 +21,7 @@ async function readStreams(scope,signal){
   });
 }
 
-export function mountPublicVideo(scope,onStreams=()=>{}){
+export function mountPublicVideo(scope,onStreams=()=>{},client){
   stopPublicVideo();
   const slots=[...document.querySelectorAll('[data-public-video]')];
   const controller=new AbortController();let timer,closePlayer=()=>{};
@@ -38,7 +39,7 @@ export function mountPublicVideo(scope,onStreams=()=>{}){
         slot.replaceChildren();
         if(active.has(slot.dataset.publicVideo)){
           const button=document.createElement('button');button.textContent='XEM LIVE';button.className='public-video-button';
-          button.onclick=()=>{closePlayer();closePlayer=openPlayer({...scope,match_id:slot.dataset.publicVideo},slot.dataset.videoLabel,()=>{slot.textContent='Video ngoại tuyến / đã kết thúc';});};
+          button.onclick=()=>{closePlayer();closePlayer=openPlayer({...scope,match_id:slot.dataset.publicVideo},slot.dataset.videoLabel,()=>{slot.textContent='Video ngoại tuyến / đã kết thúc';},client);};
           slot.append(button);
         }else slot.textContent='';
       }
@@ -49,7 +50,7 @@ export function mountPublicVideo(scope,onStreams=()=>{}){
   refresh();
 }
 
-export function mountHomepageVideo(){
+export function mountHomepageVideo(client){
   stopPublicVideo();
   const section=document.querySelector('#homepageLive'),cards=section.querySelector('.discovery-grid');
   const controller=new AbortController();let timer,closePlayer=()=>{};
@@ -67,7 +68,7 @@ export function mountHomepageVideo(){
         add('p',`${stream.event_name} · ${stream.match_code||'Trận đấu'}${Number.isInteger(stream.court_number)&&stream.court_number>0?' • SÂN '+stream.court_number:''}`);
         add('strong',`${stream.team_a} vs ${stream.team_b}`);
         const button=add('button','XEM LIVE');
-        button.onclick=()=>{closePlayer();closePlayer=openPlayer({tournament_id:stream.tournament_id,event_id:stream.event_id,match_id:stream.match_id},stream.match_code,()=>{card.remove();section.hidden=!cards.children.length;});};
+        button.onclick=()=>{closePlayer();closePlayer=openPlayer({tournament_id:stream.tournament_id,event_id:stream.event_id,match_id:stream.match_id},stream.match_code,()=>{card.remove();section.hidden=!cards.children.length;},client);};
         cards.append(card);
       }
     }catch{if(!controller.signal.aborted){cards.replaceChildren();section.hidden=true;}}
@@ -76,18 +77,19 @@ export function mountHomepageVideo(){
   refresh();
 }
 
-function openPlayer(scope,label,onOffline){
+function openPlayer(scope,label,onOffline,client){
   const host=document.querySelector('#modal');
-  host.innerHTML='<div class="overlay"><section class="modal public-video-player" role="dialog" aria-modal="true" aria-label="Video trực tiếp"><div class="modalhead"><h2></h2><button class="x" aria-label="Đóng">×</button></div><video controls autoplay muted playsinline></video><p role="status" aria-live="polite">Đang kết nối video LIVE…</p><button class="secondary" data-retry>Thử lại</button></section></div>';
+  host.innerHTML='<div class="overlay"><section class="modal public-video-player" role="dialog" aria-modal="true" aria-label="Video trực tiếp"><div class="modalhead"><h2></h2><button class="x" aria-label="Đóng">×</button></div><div class="public-video-frame"><video controls autoplay muted playsinline></video><div class="live-scoreboard" hidden aria-label="Tỉ số trận đấu"><div class="live-scoreboard-head"><span data-score-status></span><span data-score-code></span></div><div class="live-scoreboard-row"><span data-score-name="1"></span><strong data-score-value="1"></strong></div><div class="live-scoreboard-row"><span data-score-name="2"></span><strong data-score-value="2"></strong></div></div></div><p role="status" aria-live="polite">Đang kết nối video LIVE…</p><button class="secondary" data-retry>Thử lại</button></section></div>';
   const panel=host.querySelector('.public-video-player'),video=panel.querySelector('video'),message=panel.querySelector('p'),retry=panel.querySelector('[data-retry]');
   panel.querySelector('h2').textContent=`Video LIVE · ${label||'Trận đấu'}`;
+  const stopScoreboard=mountScoreboard(panel,scope,client);
   const controller=new AbortController();let peer,viewerURL,timer,sessionId,closed=false,checking=false;
   const release=()=>{
     if(peer){peer.onconnectionstatechange=null;peer.close();peer=null;}
     video.srcObject?.getTracks().forEach(track=>track.stop());video.srcObject=null;
     if(viewerURL){fetch(viewerURL,{method:'DELETE',keepalive:true}).catch(()=>{});viewerURL=null;}
   };
-  const close=()=>{if(closed)return;closed=true;clearTimeout(timer);controller.abort();release();if(panel.isConnected)host.replaceChildren();window.removeEventListener('pagehide',close);};
+  const close=()=>{if(closed)return;closed=true;stopScoreboard();clearTimeout(timer);controller.abort();release();if(panel.isConnected)host.replaceChildren();window.removeEventListener('pagehide',close);};
   panel.querySelector('.x').onclick=close;
   host.querySelector('.overlay').onclick=event=>{if(event.target===panel.parentElement)close();};
   window.addEventListener('pagehide',close);
@@ -124,4 +126,39 @@ function openPlayer(scope,label,onOffline){
   };
   retry.onclick=()=>{if(!checking){release();check();}};
   check();return close;
+}
+
+// Independent of stream discovery, connection state and player retries.
+function mountScoreboard(panel,scope,client){
+  if(!client||!scope.match_id||!scope.event_id)return ()=>{};
+  const card=panel.querySelector('.live-scoreboard');
+  let db;
+  try{db=competitionClient(client,{id:scope.event_id,tournament_id:scope.tournament_id});}catch{return ()=>{};}
+  let pending,timer,stopped=false,teamKey='',names={};
+  const refresh=async()=>{
+    const controller=new AbortController();pending=controller;
+    const timeout=setTimeout(()=>controller.abort(),12000);
+    try{
+      const {data:match,error}=await db.from('matches').select('match_code,status,team1_id,team2_id,team1_score,team2_score,court_number').eq('tournament_id',scope.tournament_id).eq('id',scope.match_id).abortSignal(controller.signal).maybeSingle();
+      if(error||!match||stopped||!panel.isConnected)return;
+      const ids=[match.team1_id,match.team2_id].filter(Boolean),key=ids.join(',');
+      if(key!==teamKey){
+        const result=await db.from('teams').select('id,name').eq('tournament_id',scope.tournament_id).in('id',ids).abortSignal(controller.signal);
+        if(result.error)return;
+        names=Object.fromEntries((result.data||[]).map(team=>[team.id,team.name]));teamKey=key;
+      }
+      if(stopped||!panel.isConnected)return;
+      card.querySelector('[data-score-status]').textContent=(match.status==='completed'?'✓ KẾT THÚC':'🔴 LIVE')+(Number.isInteger(match.court_number)&&match.court_number>0?' · SÂN '+match.court_number:'');
+      card.querySelector('[data-score-code]').textContent=match.match_code||'';
+      for(const n of [1,2]){
+        const name=card.querySelector(`[data-score-name="${n}"]`);
+        name.textContent=names[match[`team${n}_id`]]||'—';name.title=name.textContent;
+        card.querySelector(`[data-score-value="${n}"]`).textContent=match[`team${n}_score`]??'—';
+      }
+      card.hidden=false;
+    }catch{ /* Keep the last known score; never affect playback. */ }
+    finally{clearTimeout(timeout);if(!stopped&&panel.isConnected)timer=setTimeout(refresh,2000);}
+  };
+  refresh();
+  return ()=>{stopped=true;clearTimeout(timer);pending?.abort();};
 }

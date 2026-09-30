@@ -10,3 +10,13 @@
 .homepage-live-indicator{color:#dc2626;font-size:12px;font-weight:800}
 #homepageLive[hidden]{display:none}
 #shareFeedback{display:block;font-size:13px;color:#64748b;margin:6px 0}
+
+.public-video-frame{position:relative;isolation:isolate}
+.live-scoreboard{position:absolute;top:10px;left:10px;z-index:1;width:min(260px,58%);box-sizing:border-box;padding:9px 11px;background:rgba(15,20,17,.85);color:#f8fafc;border:1px solid rgba(255,255,255,.18);border-left:3px solid #a3ad65;border-radius:8px;box-shadow:0 2px 12px #0005;pointer-events:none;font-size:12px;line-height:1.25}
+.live-scoreboard[hidden]{display:none}
+.live-scoreboard-head{display:flex;justify-content:space-between;gap:8px;margin-bottom:7px;font-size:10px;font-weight:800;color:#dce3b7}
+.live-scoreboard-head span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.live-scoreboard-row{display:grid;grid-template-columns:minmax(0,1fr) 3ch;align-items:center;gap:10px;margin-top:4px}
+.live-scoreboard-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+.live-scoreboard-row strong{text-align:right;font-size:20px;font-variant-numeric:tabular-nums;line-height:1.1;color:#fff}
+@media(max-width:600px),(max-height:500px) and (orientation:landscape){.live-scoreboard{top:6px;left:6px;width:min(220px,55%);padding:6px 8px;font-size:11px}.live-scoreboard-head{font-size:9px;margin-bottom:4px}.live-scoreboard-row{gap:6px;margin-top:3px}.live-scoreboard-row strong{font-size:18px}}
