@@ -52,11 +52,33 @@ function gatherIce(peer){
 export function renderBroadcaster(app){
   const params=new URLSearchParams(location.hash.slice(1));
   const session_id=params.get('session'),token=params.get('token');
-  app.innerHTML='<main class="broadcaster"><small>THE PANTRY · LIVE</small><h1>Phát trực tiếp trận đấu</h1><p>Đặt điện thoại nằm ngang, hướng camera về sân. Giữ trang này mở khi phát.</p><video autoplay muted playsinline aria-label="Xem trước camera"></video><div class="broadcast-actions"><button id="camera">Cho phép camera & micro</button><button id="broadcast" disabled>Bắt đầu LIVE</button><button id="stopBroadcast" class="secondary" disabled>Dừng LIVE</button></div><p id="broadcastMessage" role="status" aria-live="polite"></p></main>';
+  app.innerHTML='<main class="broadcaster"><section class="broadcast-rotation" hidden role="status" aria-live="polite"><div class="broadcast-rotation-icon" aria-hidden="true">📱 ↻</div><h2></h2><p></p></section><small>THE PANTRY · LIVE</small><h1>Phát trực tiếp trận đấu</h1><p>Đặt điện thoại nằm ngang, hướng camera về sân. Giữ trang này mở khi phát.</p><video autoplay muted playsinline aria-label="Xem trước camera"></video><div class="broadcast-actions"><button id="camera">Cho phép camera & micro</button><button id="broadcast" disabled>Bắt đầu LIVE</button><button id="stopBroadcast" class="secondary" disabled>Dừng LIVE</button></div><p id="broadcastMessage" role="status" aria-live="polite"></p></main>';
   const video=app.querySelector('video'),camera=app.querySelector('#camera'),start=app.querySelector('#broadcast'),stop=app.querySelector('#stopBroadcast'),message=app.querySelector('#broadcastMessage');
   let media,peer,attempted=false,expiryTimer,heartbeatTimer,heartbeatRequest;
+  let cameraReady=false,broadcasting=false;
+  const rotation=app.querySelector('.broadcast-rotation');
+  const phoneUsage=window.matchMedia('(pointer: coarse) and (hover: none) and (max-device-width: 767px), (pointer: coarse) and (hover: none) and (max-device-height: 767px)');
+  const portrait=window.matchMedia('(orientation: portrait)');
+  const needsRotation=()=>phoneUsage.matches&&portrait.matches;
+  const updateOrientation=()=>{
+    const blocked=needsRotation();
+    rotation.hidden=!blocked;
+    rotation.classList.toggle('broadcast-rotation-live',broadcasting);
+    rotation.querySelector('h2').textContent=broadcasting?'⚠️ VUI LÒNG XOAY NGANG ĐIỆN THOẠI':'📱 XOAY NGANG ĐIỆN THOẠI';
+    rotation.querySelector('p').textContent=broadcasting?'Livestream vẫn đang tiếp tục.':'Livestream được thiết kế theo khung hình ngang 16:9. Vui lòng xoay điện thoại ngang để bắt đầu.';
+    start.disabled=blocked||!cameraReady||broadcasting||attempted;
+  };
+  phoneUsage.addEventListener('change',updateOrientation);
+  portrait.addEventListener('change',updateOrientation);
+  window.addEventListener('resize',updateOrientation);
+  window.addEventListener('pagehide',()=>{
+    phoneUsage.removeEventListener('change',updateOrientation);
+    portrait.removeEventListener('change',updateOrientation);
+    window.removeEventListener('resize',updateOrientation);
+  },{once:true});
+  updateOrientation();
   const request=action=>({action,session_id,token});
-  const release=()=>{clearTimeout(expiryTimer);clearInterval(heartbeatTimer);heartbeatRequest?.abort();if(peer){peer.onconnectionstatechange=null;peer.close();peer=null;}media?.getTracks().forEach(track=>track.stop());media=null;video.srcObject=null;};
+  const release=()=>{clearTimeout(expiryTimer);clearInterval(heartbeatTimer);heartbeatRequest?.abort();if(peer){peer.onconnectionstatechange=null;peer.close();peer=null;}media?.getTracks().forEach(track=>track.stop());media=null;video.srcObject=null;cameraReady=false;broadcasting=false;updateOrientation();};
   const heartbeat=async()=>{
     if(peer?.connectionState!=='connected'||heartbeatRequest)return;
     const connection=peer,controller=new AbortController();heartbeatRequest=controller;
@@ -80,12 +102,14 @@ export function renderBroadcaster(app){
   camera.onclick=async()=>{
     camera.disabled=true;message.textContent='Vui lòng cho phép camera và micro…';
     try{
-      media=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:true});
-      video.srcObject=media;await video.play();start.disabled=false;stop.disabled=false;
+      media=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},...(phoneUsage.matches?{aspectRatio:{ideal:16/9}}:{}),width:{ideal:1280},height:{ideal:720}},audio:true});
+      video.srcObject=media;await video.play();cameraReady=true;updateOrientation();stop.disabled=false;
       message.textContent='Camera đã sẵn sàng. Chưa phát LIVE.';
     }catch(error){release();camera.disabled=false;message.textContent=error.name==='NotAllowedError'?'Camera hoặc micro bị chặn. Hãy cấp quyền trong trình duyệt rồi thử lại.':'Không mở được camera và micro. Hãy đóng ứng dụng khác đang sử dụng camera rồi thử lại.';}
   };
   start.onclick=async()=>{
+    if(needsRotation()){updateOrientation();return;}
+    broadcasting=true;updateOrientation();
     start.disabled=true;stop.disabled=true;message.textContent='Đang kết nối LIVE…';
     try{
       peer=new RTCPeerConnection({bundlePolicy:'max-bundle'});
