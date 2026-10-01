@@ -1,0 +1,9 @@
+.ref-secondary { margin: 12px 0; padding: 12px 0; border-top: 1px solid var(--line, #ddd); }
+.ref-secondary > b, .ref-secondary-login > b { font-size: .8rem; letter-spacing: .04em; }
+.ref-secondary p { margin: 8px 0; }
+.ref-secondary strong { font-size: 1.25rem; letter-spacing: .15em; }
+.ref-secondary .ref-admin-actions { flex-wrap: wrap; }
+.ref-secondary button { font-size: .75rem; padding: 8px 10px; }
+.ref-secondary [role="status"] { display: block; font-size: .8rem; margin-top: 6px; }
+.ref-secondary-login { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line, #ddd); }
+.referee-claim #refClaim { margin: 0; }
