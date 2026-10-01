@@ -1076,4 +1076,5 @@ async function slotsModal(t){
 }
 // Shared homepage action lives outside #app, which role-specific renders replace.
 document.querySelector('#guideLineButton').onclick=async()=>{const {openGuideLine}=await import('./guide-line.js');openGuideLine()};
+document.querySelector('#contactUsButton').onclick=async()=>{const {openContactUs}=await import('./contact-us.js');openContactUs()};
 boot()

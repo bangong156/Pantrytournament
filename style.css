@@ -375,7 +375,7 @@
 /* Public Guide Line: isolated dialog and homepage entry point. */
 .public-home-header .homepage-guide-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
 .homepage-guide-actions button{white-space:nowrap;font-size:12px;min-height:40px;padding:10px 14px}
-.homepage-guide-actions #guideLineButton{background:#454f33;color:#fffef9;border:1px solid #454f33;letter-spacing:.05em}
+.homepage-guide-actions #guideLineButton,.homepage-guide-actions #contactUsButton{background:#454f33;color:#fffef9;border:1px solid #454f33;letter-spacing:.05em}
 .guide-dialog{width:min(1160px,calc(100% - 48px));height:88vh;height:88dvh;max-width:none;max-height:90vh;max-height:90dvh;margin:auto;padding:0;border:1px solid #d5d4c6;border-radius:18px;background:#f8f7f1;color:#25261f;box-shadow:0 24px 90px #25261f40;overflow:hidden}
 .guide-dialog::backdrop{background:#252b20a8}
 .guide-shell{display:flex;flex-direction:column;height:100%;min-height:0}
@@ -429,7 +429,7 @@
 .guide-flow li{position:relative;margin:0!important;padding:11px 14px;border:1px solid #dbe1c9;border-radius:8px;background:#f0f3e5;color:#485a32;text-align:center;font-size:12px;font-weight:750;line-height:1.5}
 .guide-flow li:not(:last-child)::after{content:'↓';position:absolute;top:calc(100% + 2px);left:50%;transform:translateX(-50%);font-size:16px;line-height:20px;color:#92a071}
 .guide-end{text-align:center;color:#8a8f79;letter-spacing:.13em;font-size:10px;margin:26px 0 8px}
-.guide-dialog button:focus-visible,.guide-dialog select:focus-visible,.guide-content:focus-visible,#guideLineButton:focus-visible{outline:2px solid #7d8f5e;outline-offset:3px}
+.guide-dialog button:focus-visible,.guide-dialog select:focus-visible,.guide-content:focus-visible,#guideLineButton:focus-visible,#contactUsButton:focus-visible{outline:2px solid #7d8f5e;outline-offset:3px}
 @media(max-width:760px){
   .public-home-header:has(.homepage-guide-actions){gap:8px;padding-left:16px;padding-right:16px}
   .public-home-header .homepage-guide-actions{gap:6px}
@@ -458,6 +458,11 @@
 
 /* Persistent shared homepage action, outside auth-specific #app markup. */
 #homepageGuide{display:none}
+#homepageGuide{gap:10px;flex-wrap:nowrap}
+.guide-dialog.contact-dialog{width:min(480px,calc(100% - 32px));height:auto;max-height:90vh;max-height:90dvh;border:1px solid #d5d4c6;border-radius:18px;overflow-y:auto}
+.contact-content{padding:16px 28px;color:#55594a;font-size:14px;line-height:1.7}
+.contact-content a{color:#3e492f;font-weight:700;font-variant-numeric:tabular-nums}
+@media(max-width:760px){#homepageGuide{gap:6px}.contact-content{padding:16px}}
 /* Share header tracks without moving the persistent action into #app. */
 body:has(#app > :is(.public-home-header,.dashboard-header)){display:grid;grid-template-columns:5% max-content max-content minmax(0,1fr) 5%}
 body:has(#app > :is(.public-home-header,.dashboard-header)) > #app{display:contents}
