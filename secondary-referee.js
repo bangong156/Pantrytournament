@@ -25,14 +25,14 @@ export function bindSecondaryRefereeControls(root,{client,tournamentId,sessionTo
 }
 
 export function secondaryRefereeLoginMarkup(){
- return '<section class="ref-secondary-login"><b>MÃ CODE TRỌNG TÀI PHỤ</b><form id="secondaryRefClaim"><label>Mã phụ<input name="code" required pattern="[0-9]{5}" minlength="5" maxlength="5" inputmode="numeric" autocomplete="one-time-code" placeholder="Nhập 5 số"></label><button class="wide">VÀO BẢNG</button><div role="alert" data-secondary-login-feedback></div></form></section>';
+ return '<section class="ref-secondary-login"><b>MÃ CODE TRỌNG TÀI PHỤ</b><form id="secondaryRefClaim"><label>Mã phụ<input name="code" required pattern="[0-9]{5}" minlength="5" maxlength="5" inputmode="numeric" autocomplete="one-time-code" placeholder="Nhập 5 số"></label><label>TÊN TRỌNG TÀI<input name="referee_name" required autocomplete="name" placeholder="Minh"></label><button class="wide">VÀO BẢNG</button><div role="alert" data-secondary-login-feedback></div></form></section>';
 }
 
 export function bindSecondaryRefereeLogin(root,{client,tournamentId,onClaimed}){
  const form=root.querySelector('#secondaryRefClaim');
  form.onsubmit=async event=>{
-  event.preventDefault();const button=form.querySelector('button');button.disabled=true;
-  const {data,error}=await client.rpc('claim_secondary_referee_access',{p_tournament_id:tournamentId,p_code:form.elements.code.value.trim()});
+  event.preventDefault();const name=form.elements.referee_name.value.trim();if(!name){form.querySelector('[data-secondary-login-feedback]').textContent='Tên trọng tài là bắt buộc';return}const button=form.querySelector('button');button.disabled=true;
+  const {data,error}=await client.rpc('claim_secondary_referee_access',{p_tournament_id:tournamentId,p_code:form.elements.code.value.trim(),p_referee_name:name});
   const row=data?.[0];
   if(error||!row){button.disabled=false;form.querySelector('[data-secondary-login-feedback]').textContent=error?.message||'Mã phụ không hợp lệ, đã tắt hoặc tạm thời bị khóa.';return;}
   await onClaimed(row);

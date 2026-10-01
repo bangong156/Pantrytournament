@@ -282,7 +282,7 @@ async function refereeConsole(tid,token,validated=null,showList=false){
  if(epoch!==renderEpoch)return;
  if(!refGroup||!await loadCompetitionEvents({id:tid},refGroup.event_id,epoch))return;
  const db=competitionClient(supabase,activeEvent);
- const [{data:t},{data:g},{data:teams},{data:matches},{data:mlp},{data:slots},{data:active,error:activeError},standings,secondaryContext]=await Promise.all([
+ const [{data:t},{data:g},{data:teams},{data:matches},{data:mlp},{data:slots},{data:active,error:activeError},standings,secondaryContext,ownership]=await Promise.all([
   supabase.from('tournaments').select('*').eq('id',tid).single(),
   db.from('groups').select('*').eq('id',saved.group_id).eq('tournament_id',tid).single(),
   db.from('teams').select('id,name').eq('tournament_id',tid),
@@ -290,24 +290,28 @@ async function refereeConsole(tid,token,validated=null,showList=false){
   db.from('mlp_configs').select('style,members_per_team').eq('tournament_id',tid).maybeSingle(),
   db.from('mlp_slots').select('id').eq('tournament_id',tid),
   supabase.rpc('referee_live_state',{p_session_token:token}),standingsData(tid),
-  supabase.rpc('referee_secondary_context',{p_session_token:token})
+  supabase.rpc('referee_secondary_context',{p_session_token:token}),
+  supabase.rpc('referee_match_ownership',{p_session_token:token})
  ]);
  if(epoch!==renderEpoch)return;
  if(activeError){console.error('Active match:',activeError);return publicTournament(tid)}
+ if(ownership.error){console.error('Match ownership:',ownership.error);return publicTournament(tid)}
+ const controllers=Object.fromEntries((ownership.data||[]).map(row=>[row.match_id,row]));
  const maxPlaying=secondaryContext.data?.max_playing===2?2:1,playingCount=(matches||[]).filter(m=>m.status==='playing').length;
- if(active&&!showList&&maxPlaying===1)return renderScoreboard(tid,token,active);
+ if(active?.can_control&&!showList&&maxPlaying===1)return renderScoreboard(tid,token,active);
  const tm=Object.fromEntries((teams||[]).map(x=>[x.id,x.name])),st=(standings||[]).find(x=>x.group.id===saved.group_id)?.rows||[],isMini=mlp?.style==='mini'||mlp?.members_per_team===3||slots?.length===3,isBasic=activeEvent.format==='mlp'&&!isMini;
  const cards=(matches||[]).map(m=>{
   const team1=esc(tm[m.team1_id]||'TBD'),team2=esc(tm[m.team2_id]||'TBD'),code=esc(m.match_code);
-  if(isBasic)return `<article class="ref-match ${m.status==='completed'?'done':''}"><div class="ref-order"><span>${code}</span></div><div class="ref-teams"><b>${team1}</b><span>VS</span><b>${team2}</b></div><div class="series-result"><b>${m.team1_score??'–'}</b><span>:</span><b>${m.team2_score??'–'}</b></div><button data-ref-mlp="${m.id}">Nhập game MLP</button></article>`;
+  const controller=controllers[m.id];
+  if(isBasic)return `<article class="ref-match ${m.status==='completed'?'done':''}"><div class="ref-order"><span>${code}</span></div><div class="ref-teams"><b>${team1}</b><span>VS</span><b>${team2}</b></div><div class="series-result"><b>${m.team1_score??'–'}</b><span>:</span><b>${m.team2_score??'–'}</b></div><button data-ref-mlp="${m.id}">${m.status==='playing'&&!controller?.can_control?'Xem game MLP':'Nhập game MLP'}</button>${m.status==='playing'?`<p>ĐANG ĐÁNH${controller?.can_control?' · BẠN ĐANG BẮT':''} · TT: ${esc(controller?.controller_name||'Chưa có trọng tài')}</p>${!controller?.is_claimed?`<button data-ref-claim="${m.id}">TIẾP TỤC CHẤM ĐIỂM</button>`:''}`:''}</article>`;
   if(m.status==='completed')return `<article class="ref-match done ref-completed"><strong>${code} ✓</strong><span>${team1} <b>${m.team1_score}–${m.team2_score}</b> ${team2}</span><button class="ghost" data-ref-correct="${m.id}">Sửa kết quả</button></article>`;
-  const playing=m.status==='playing',owned=active?.match_id===m.id;
-  return `<article class="ref-match ref-scheduled ${playing?'ref-playing':''}"><div class="ref-match-head"><b>${code}</b><span>${playing?'🔴 LIVE':'CHƯA BẮT ĐẦU'}</span></div><div class="ref-match-teams">${team1} <span>vs</span> ${team2}</div>${playing?`<div class="ref-current-score">${m.team1_score??0}–${m.team2_score??0}</div>`:`<div class="ref-start-options"><label>Đích điểm<input type="number" inputmode="numeric" min="1" max="999" step="1" required data-ref-target="${m.id}" value="${m.score_target??11}"></label><label class="ref-win-two"><input type="checkbox" data-ref-win-two="${m.id}" ${m.started_at&&m.win_by_two!==false?'checked':''}> Thắng cách 2 điểm</label></div>`}<button class="ref-start-button" data-live-start="${m.id}" ${!playing&&playingCount>=maxPlaying?'disabled':''}>${owned?'TIẾP TỤC CHẤM ĐIỂM':playing?'MỞ BẢNG ĐIỂM':'BẮT ĐẦU TRẬN NÀY'}</button><div class="ref-target-error" role="alert" data-ref-target-error="${m.id}"></div></article>`;
+  const playing=m.status==='playing',owned=controller?.can_control===true;
+  return `<article class="ref-match ref-scheduled ${playing?'ref-playing':''}"><div class="ref-match-head"><b>${code}</b><span>${playing?`ĐANG ĐÁNH${owned?' · BẠN ĐANG BẮT':''}<small>TT: ${esc(controller?.controller_name||'Chưa có trọng tài')}</small>`:'CHƯA BẮT ĐẦU'}</span></div><div class="ref-match-teams">${team1} <span>vs</span> ${team2}</div>${playing?`<div class="ref-current-score">${m.team1_score??0}–${m.team2_score??0}</div>`:`<div class="ref-start-options"><label>Đích điểm<input type="number" inputmode="numeric" min="1" max="999" step="1" required data-ref-target="${m.id}" value="${m.score_target??11}"></label><label class="ref-win-two"><input type="checkbox" data-ref-win-two="${m.id}" ${m.started_at&&m.win_by_two!==false?'checked':''}> Thắng cách 2 điểm</label></div>`}<button class="ref-start-button" data-live-start="${m.id}" ${!playing&&playingCount>=maxPlaying?'disabled':''}>${owned?'TIẾP TỤC CHẤM ĐIỂM':playing?'XEM BẢNG ĐIỂM':'BẮT ĐẦU TRẬN NÀY'}</button>${playing&&!controller?.is_claimed?`<button data-ref-claim="${m.id}">TIẾP TỤC CHẤM ĐIỂM</button>`:''}<div class="ref-target-error" role="alert" data-ref-target-error="${m.id}"></div></article>`;
  }).join('');
  app.innerHTML=`<header class="ref-header"><div><button class="ghost" id="leaveRef">← Rời bàn</button>${pantryLogoMarkup('pantry-logo-small')}<b>⚖ Bảng ${esc(g?.name||saved.group_name)}</b></div><div class="ref-name">${esc(saved.referee_name)}</div></header><main class="wrap referee-page"><div class="referee-banner"><div><small>REFEREE MODE</small><h1>Bảng ${esc(g?.name||saved.group_name)}</h1><p>${esc(t?.name)} → ${esc(activeEvent.name)} · Chỉ nhập kết quả của bảng này.</p></div></div><div id="refSecondary"></div>${active?`<button class="ref-active-banner" id="resumeLive">🔴 Trận ${esc(active.match_code)} đang thi đấu · Tiếp tục</button>`:''}<div class="ref-layout"><section><div class="ref-match-list">${cards||'<div class="panel">Chưa có trận.</div>'}</div></section><aside class="ref-standing"><h3>BXH LIVE</h3><table><tr><th>#</th><th>Đội</th><th>W</th><th>+/-</th></tr>${st.map((r,i)=>`<tr class="${i<2?'qualify-row':''}"><td>${i+1}</td><td><b>${esc(r.name)}</b></td><td>${r.w}</td><td>${r.diff>0?'+':''}${r.diff}</td></tr>`).join('')}</table></aside></div></main><div id="modal"></div>`;
  mountPrimarySecondaryControls(tid,token,saved.group_id,epoch,secondaryContext);
  document.querySelector('#leaveRef').onclick=()=>publicTournament(tid);
- if(active)document.querySelector('#resumeLive').onclick=()=>renderScoreboard(tid,token,active);
+ if(active)document.querySelector('#resumeLive').onclick=()=>loadScoreboard(tid,token,active.match_id);
  document.querySelectorAll('[data-ref-mlp]').forEach(b=>b.onclick=()=>refereeMlpModal(tid,token,(matches||[]).find(x=>x.id===b.dataset.refMlp),tm));
  document.querySelectorAll('[data-ref-correct]').forEach(b=>b.onclick=()=>{
   const m=(matches||[]).find(x=>x.id===b.dataset.refCorrect);
@@ -315,9 +319,14 @@ async function refereeConsole(tid,token,validated=null,showList=false){
   const f=document.querySelector('#correctScore');f.querySelector('.x').onclick=()=>document.querySelector('#modal').innerHTML='';
   f.onsubmit=async e=>{e.preventDefault();const fd=new FormData(f),a=+fd.get('score1'),c=+fd.get('score2');if(a===c)return f.querySelector('#correctMsg').textContent='Tỉ số không được hòa.';const save=f.querySelector('.wide');save.disabled=true;save.textContent='Đang lưu…';const {error}=await supabase.rpc('referee_submit_score',{p_session_token:token,p_match_id:m.id,p_team1_score:a,p_team2_score:c});if(error){save.disabled=false;save.textContent='Lưu kết quả sửa';return refereeWriteError(tid,token,error)}document.querySelector('#modal').innerHTML='';refereeConsole(tid,token,null,true)};
  });
- document.querySelectorAll('[data-live-start]').forEach(b=>b.onclick=async()=>{
-  if(active?.match_id===b.dataset.liveStart)return renderScoreboard(tid,token,active);
-  const id=b.dataset.liveStart,match=(matches||[]).find(m=>m.id===id);
+ document.querySelectorAll('[data-live-start],[data-ref-claim]').forEach(b=>b.onclick=async()=>{
+  const id=b.dataset.liveStart||b.dataset.refClaim,match=(matches||[]).find(m=>m.id===id);
+  if(match?.status==='playing'&&!b.dataset.refClaim)return loadScoreboard(tid,token,id);
+  if(b.dataset.refClaim){
+   const {error}=await supabase.rpc('referee_continue_match',{p_session_token:token,p_match_id:id});
+   if(error)await refereeWriteError(tid,token,error);
+   return refereeConsole(tid,token,null,true);
+  }
   const input=document.querySelector(`[data-ref-target="${id}"]`),raw=input?.value.trim(),target=match?.status==='playing'?match.score_target:Number(raw);
   if(match?.status!=='playing'&&(!raw||!/^[0-9]+$/.test(raw)||!Number.isInteger(target)||target<1||target>999)){
    document.querySelector(`[data-ref-target-error="${id}"]`).textContent='Đích điểm phải là số nguyên từ 1 đến 999.';input?.focus();return;
@@ -340,12 +349,17 @@ async function loadScoreboard(tid,token,matchId){
 let scoreTapLockUntil=0;
 function renderScoreboard(tid,token,state,message='',pulseTeam=0){
  stopLive();renderEpoch++;
- const s1=+state.team1_score,s2=+state.team2_score,ready=state.can_finish===true;
- app.innerHTML=`<main class="scorekeeper-shell"><header class="scorekeeper-header"><button class="ghost" id="scoreBack">← Danh sách</button><div><b>${esc(state.match_code)}</b><small>${esc(state.tournament_name)} → ${esc(state.event_name)} · Bảng ${esc(state.group_name)}</small></div>${pantryLogoMarkup('pantry-logo-scorekeeper')}<span class="scorekeeper-live">● LIVE</span></header><div class="scorekeeper-content"><div id="refSecondary"></div><div class="scorekeeper-rules"><span>ĐÍCH ${state.score_target} ĐIỂM</span><span>${state.win_by_two?'THẮNG CÁCH 2':'THẮNG CÁCH 1'}</span></div><div class="scorekeeper-teams">${[1,2].map(n=>`<section class="scorekeeper-team"><div class="scorekeeper-team-name">${esc(n===1?state.team1_name:state.team2_name)}</div><div class="scorekeeper-score ${pulseTeam===n?'scorekeeper-score-pulse':''}" data-score="${n}">${n===1?s1:s2}</div><div class="scorekeeper-actions"><button class="scorekeeper-plus" data-score-team="${n}" data-score-delta="1" aria-label="Cộng một điểm cho ${esc(n===1?state.team1_name:state.team2_name)}">＋</button><button class="scorekeeper-minus" data-score-team="${n}" data-score-delta="-1" ${n===1&&s1===0||n===2&&s2===0?'disabled':''} aria-label="Trừ một điểm cho ${esc(n===1?state.team1_name:state.team2_name)}">− <span>Hoàn tác</span></button></div></section>`).join('')}</div>${ready?'<button class="scorekeeper-finish" id="finishLive">🏁 KẾT THÚC TRẬN</button>':''}<div class="scorekeeper-feedback" id="scoreFeedback" role="status">${esc(message)}</div>${ready?'':'<p class="scorekeeper-hint">Trận chỉ có thể kết thúc khi đạt đích điểm và đủ cách biệt.</p>'}</div><div id="modal"></div></main>`;
+ const canControl=state.can_control===true,s1=+state.team1_score,s2=+state.team2_score,ready=canControl&&state.can_finish===true;
+ app.innerHTML=`<main class="scorekeeper-shell"><header class="scorekeeper-header"><button class="ghost" id="scoreBack">← Danh sách</button><div><b>${esc(state.match_code)}</b><small>${esc(state.tournament_name)} → ${esc(state.event_name)} · Bảng ${esc(state.group_name)}</small></div>${pantryLogoMarkup('pantry-logo-scorekeeper')}<span class="scorekeeper-live">● LIVE</span></header><div class="scorekeeper-content"><div id="refSecondary"></div><p>ĐANG ĐÁNH${canControl?' · BẠN ĐANG BẮT':''} · TT: ${esc(state.controller_name||'Chưa có trọng tài')}</p>${!state.is_claimed?'<button id="claimRefMatch">TIẾP TỤC CHẤM ĐIỂM</button>':''}<div class="scorekeeper-rules"><span>ĐÍCH ${state.score_target} ĐIỂM</span><span>${state.win_by_two?'THẮNG CÁCH 2':'THẮNG CÁCH 1'}</span></div><div class="scorekeeper-teams">${[1,2].map(n=>`<section class="scorekeeper-team"><div class="scorekeeper-team-name">${esc(n===1?state.team1_name:state.team2_name)}</div><div class="scorekeeper-score ${pulseTeam===n?'scorekeeper-score-pulse':''}" data-score="${n}">${n===1?s1:s2}</div><div class="scorekeeper-actions"><button class="scorekeeper-plus" data-score-team="${n}" data-score-delta="1" ${canControl?'':'disabled'} aria-label="Cộng một điểm cho ${esc(n===1?state.team1_name:state.team2_name)}">＋</button><button class="scorekeeper-minus" data-score-team="${n}" data-score-delta="-1" ${!canControl||n===1&&s1===0||n===2&&s2===0?'disabled':''} aria-label="Trừ một điểm cho ${esc(n===1?state.team1_name:state.team2_name)}">− <span>Hoàn tác</span></button></div></section>`).join('')}</div>${ready?'<button class="scorekeeper-finish" id="finishLive">🏁 KẾT THÚC TRẬN</button>':''}<div class="scorekeeper-feedback" id="scoreFeedback" role="status">${esc(message)}</div>${!canControl||ready?'':'<p class="scorekeeper-hint">Trận chỉ có thể kết thúc khi đạt đích điểm và đủ cách biệt.</p>'}</div><div id="modal"></div></main>`;
  mountPrimarySecondaryControls(tid,token,state.group_id,renderEpoch);
  document.querySelector('#scoreBack').onclick=()=>refereeConsole(tid,token,null,true);
+ document.querySelector('#claimRefMatch')?.addEventListener('click',async()=>{
+  const {error}=await supabase.rpc('referee_continue_match',{p_session_token:token,p_match_id:state.match_id});
+  if(error)await refereeWriteError(tid,token,error);
+  return loadScoreboard(tid,token,state.match_id);
+ });
  document.querySelectorAll('[data-score-team]').forEach(b=>b.onclick=async()=>{
-  if(Date.now()<scoreTapLockUntil)return;scoreTapLockUntil=Date.now()+500;
+  if(!canControl||Date.now()<scoreTapLockUntil)return;scoreTapLockUntil=Date.now()+500;
   app.querySelectorAll('button').forEach(x=>x.disabled=true);
   const score=app.querySelector(`[data-score="${b.dataset.scoreTeam}"]`);score.classList.add('scorekeeper-score-pending');
   document.querySelector('#scoreFeedback').textContent='Đang lưu điểm…';stopLive();
@@ -370,9 +384,14 @@ function renderScoreboard(tid,token,state,message='',pulseTeam=0){
 
 async function refereeMlpModal(tid,token,match,tm){const db=competitionClient(supabase,activeEvent);
  const epoch=renderEpoch;
+ const {data:ownership,error:ownershipError}=await supabase.rpc('referee_match_ownership',{p_session_token:token});
+ if(epoch!==renderEpoch)return;
+ if(ownershipError)return refereeWriteError(tid,token,ownershipError);
+ const controller=ownership?.find(row=>row.match_id===match.id),canEdit=match.status==='completed'||(match.status!=='playing'&&!controller?.is_claimed)||controller?.can_control===true;
  const {data:games}=await db.from('mlp_games').select('*').eq('match_id',match.id).order('game_order');if(epoch!==renderEpoch)return;const map=Object.fromEntries((games||[]).map(g=>[g.game_order,g])),types=[['women_doubles','Đôi nữ'],['men_doubles','Đôi nam'],['mixed_1','Mixed 1'],['mixed_2','Mixed 2']],a4=(games||[]).filter(g=>g.game_order<=4&&g.winner_team_id===match.team1_id).length,b4=(games||[]).filter(g=>g.game_order<=4&&g.winner_team_id===match.team2_id).length,needDB=((games||[]).filter(g=>g.game_order<=4).length===4&&a4===2&&b4===2),rows=[...types,...(needDB?[['dreambreaker','DreamBreaker']]:[])];
  document.querySelector('#modal').innerHTML=`<div class="overlay"><div class="modal mlp-match-modal"><div class="modalhead"><div><small>TRỌNG TÀI · ${esc(match.match_code)}</small><h2>${esc(tm[match.team1_id])} <span class="mlp-vs">vs</span> ${esc(tm[match.team2_id])}</h2></div><button class="x">×</button></div><div class="mlp-game-list">${rows.map(([type,label],i)=>{const n=i+1,g=map[n];return `<div class="mlp-game-row ${g?'game-done':''}"><div class="mlp-game-no">G${n}</div><div class="mlp-game-name"><b>${label}</b><small>${n===5?'Quyết định khi 2–2':'Game '+n}</small></div><div class="mlp-game-score"><input type="number" min="0" data-rg1="${n}" value="${g?.team1_score??''}"><span>:</span><input type="number" min="0" data-rg2="${n}" value="${g?.team2_score??''}"></div><button data-rg-save="${n}" data-type="${type}" class="${g?'saved-btn':''}">${g?'Sửa':'Lưu'}</button></div>`}).join('')}</div><div class="mlp-match-note">${needDB?'Đang hòa 2–2 · nhập DreamBreaker.':'Nhập lần lượt 4 game chính.'}</div></div></div>`;document.querySelector('#modal .x').onclick=()=>document.querySelector('#modal').innerHTML='';
- document.querySelectorAll('[data-rg-save]').forEach(b=>b.onclick=async()=>{const n=+b.dataset.rgSave,a=document.querySelector(`[data-rg1="${n}"]`).value,c=document.querySelector(`[data-rg2="${n}"]`).value;if(a===''||c==='')return alert('Nhập đủ tỉ số.');if(+a===+c)return alert('Tỉ số không được hòa.');if(!confirm(`Xác nhận G${n}: ${a} – ${c}?`))return;const {error}=await supabase.rpc('referee_submit_mlp_game',{p_session_token:token,p_match_id:match.id,p_game_order:n,p_game_type:b.dataset.type,p_team1_score:+a,p_team2_score:+c});if(error)return refereeWriteError(tid,token,error);document.querySelector('#modal').innerHTML='';refereeConsole(tid,token)});
+ if(!canEdit)document.querySelectorAll('#modal input,[data-rg-save]').forEach(control=>control.disabled=true);
+ document.querySelectorAll('[data-rg-save]').forEach(b=>b.onclick=async()=>{if(!canEdit)return;const n=+b.dataset.rgSave,a=document.querySelector(`[data-rg1="${n}"]`).value,c=document.querySelector(`[data-rg2="${n}"]`).value;if(a===''||c==='')return alert('Nhập đủ tỉ số.');if(+a===+c)return alert('Tỉ số không được hòa.');if(!confirm(`Xác nhận G${n}: ${a} – ${c}?`))return;const {error}=await supabase.rpc('referee_submit_mlp_game',{p_session_token:token,p_match_id:match.id,p_game_order:n,p_game_type:b.dataset.type,p_team1_score:+a,p_team2_score:+c});if(error)return refereeWriteError(tid,token,error);document.querySelector('#modal').innerHTML='';refereeConsole(tid,token)});
 }
 
 function login(){stopLive();renderEpoch++;app.innerHTML=`<main class="login"><section><button class="ghost public-login-back" id="loginBack">← Xem giải đấu</button><div class="brand">THE PANTRY</div><h1>Tournament Manager</h1><p>Vận hành giải đấu & minigame pickleball.</p><form id="login"><label>Email<input name="email" type="email" required></label><label>Mật khẩu<input name="password" type="password" required></label><button>Đăng nhập</button><div id="msg"></div></form></section></main>`;document.querySelector('#loginBack').onclick=publicDashboard;document.querySelector('#login').onsubmit=async e=>{e.preventDefault();let f=new FormData(e.target);let {error}=await supabase.auth.signInWithPassword({email:f.get('email'),password:f.get('password')});if(error)return document.querySelector('#msg').textContent=error.message;boot()}}
