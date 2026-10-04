@@ -827,7 +827,7 @@ function shuffled(arr){
   return a;
 }
 async function saveGroupDistribution(tid,count,teamIds,doShuffle=true,empty=false){const db=competitionClient(supabase,activeEvent);
-  count=Math.max(1,Math.min(Number(count)||1,Math.max(1,teamIds.length)));
+  count=empty?Number(count):Math.max(1,Math.min(Number(count)||1,Math.max(1,teamIds.length)));
   const ids=doShuffle?shuffled(teamIds):[...teamIds];
   const {data:oldGroups,error:oldErr}=await db.from('groups').select('id').eq('tournament_id',tid);
   if(oldErr)throw oldErr;
@@ -892,12 +892,12 @@ async function showGroups(tid){const db=competitionClient(supabase,activeEvent);
   <div class="group-board">${freshGroups.map(g=>{const gl=links.filter(x=>x.group_id===g.id);return `<section class="group-column"><div class="group-column-head"><div><small>BẢNG</small><h2>${esc(g.name)}</h2></div><span>${gl.length} đội ${readinessBadge(gl.map(x=>tm[x.team_id]).filter(Boolean))}</span></div><div class="group-team-list">${gl.map((x,i)=>`<div class="group-team"><span class="team-index">${i+1}</span><b>${esc(tm[x.team_id]?.name||'Đội')}</b><label style="grid-column:2;margin:0">CHUYỂN BẢNG<select data-move-team="${x.team_id}" data-from="${g.id}" title="CHUYỂN BẢNG" aria-label="CHUYỂN BẢNG · ${esc(tm[x.team_id]?.name||'')}"><option value="">ĐƯA RA CHƯA CÓ BẢNG</option>${freshGroups.map(dest=>`<option value="${dest.id}" ${dest.id===g.id?'selected':''}>Bảng ${esc(dest.name)}</option>`).join('')}</select></label></div>`).join('')||'<div class="group-empty">Chưa có đội</div>'}</div></section>`}).join('')}</div><section class="panel"><h2>VĐV / ĐỘI CHƯA CÓ BẢNG</h2>${unassigned.map(t=>`<div class="team-line"><b>${esc(t.name)}</b><select data-assign-team="${t.id}" aria-label="Chọn bảng cho ${esc(t.name)}"><option value="">CHỌN BẢNG ▼</option>${freshGroups.map(g=>`<option value="${g.id}">Bảng ${esc(g.name)}</option>`).join('')}</select></div>`).join('')||'<p>Tất cả đã có bảng.</p>'}</section>`;
   document.querySelector('#manualGroups').onclick=()=>{
     const modal=document.querySelector('#modal');
-    modal.innerHTML=`<div class="overlay"><form class="modal"><h2>TẠO BẢNG THỦ CÔNG</h2><label>Số bảng cần tạo:<input name="count" type="number" min="1" max="${maxGroups}" step="1" value="${Math.min(5,maxGroups)}" required></label><p>Thay thế bảng hiện tại và lịch vòng bảng chưa thi đấu của nội dung này.</p><p role="alert"></p><div class="actions"><button type="button" class="secondary">HỦY</button><button type="submit">TẠO BẢNG</button></div></form></div>`;
+    modal.innerHTML=`<div class="overlay"><form class="modal"><h2>TẠO BẢNG THỦ CÔNG</h2><label>Số bảng cần tạo:<input name="count" type="number" min="1" step="1" value="5" required></label><p>Thay thế bảng hiện tại và lịch vòng bảng chưa thi đấu của nội dung này.</p><p role="alert"></p><div class="actions"><button type="button" class="secondary">HỦY</button><button type="submit">TẠO BẢNG</button></div></form></div>`;
     const form=modal.querySelector('form');form.querySelector('[type=button]').onclick=()=>{if(!form.querySelector('[type=submit]').disabled)modal.innerHTML=''};
     form.onsubmit=async e=>{
       e.preventDefault();if(epoch!==renderEpoch)return;
       const count=Number(form.elements.count.value),button=form.querySelector('[type=submit]');
-      if(!Number.isInteger(count)||count<1||count>maxGroups){form.querySelector('[role=alert]').textContent=`Nhập số bảng nguyên từ 1 đến ${maxGroups}.`;return}
+      if(!Number.isInteger(count)||count<1){form.querySelector('[role=alert]').textContent='Nhập số bảng nguyên lớn hơn hoặc bằng 1.';return}
       button.disabled=true;
       try{
         const {data:existing,error}=await db.from('matches').select('id').or('status.neq.scheduled,stage.neq.group,started_at.not.is.null');if(error)throw error;
