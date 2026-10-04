@@ -826,7 +826,7 @@ function shuffled(arr){
   for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}
   return a;
 }
-async function saveGroupDistribution(tid,count,teamIds,doShuffle=true){const db=competitionClient(supabase,activeEvent);
+async function saveGroupDistribution(tid,count,teamIds,doShuffle=true,empty=false){const db=competitionClient(supabase,activeEvent);
   count=Math.max(1,Math.min(Number(count)||1,Math.max(1,teamIds.length)));
   const ids=doShuffle?shuffled(teamIds):[...teamIds];
   const {data:oldGroups,error:oldErr}=await db.from('groups').select('id').eq('tournament_id',tid);
@@ -839,17 +839,20 @@ async function saveGroupDistribution(tid,count,teamIds,doShuffle=true){const db=
   if(oldIds.length){const {error:e3}=await db.from('groups').delete().eq('tournament_id',tid);if(e3)throw e3}
   const rows=Array.from({length:count},(_,i)=>({tournament_id:tid,name:groupName(i),group_order:i+1}));
   const {data:groups,error:e4}=await db.from('groups').insert(rows).select('*');if(e4)throw e4;
-  const links=ids.map((teamId,i)=>({group_id:groups[i%count].id,team_id:teamId}));
+  const links=(empty?[]:ids).map((teamId,i)=>({group_id:groups[i%count].id,team_id:teamId}));
   if(links.length){const {error:e5}=await db.from('group_teams').insert(links);if(e5)throw e5}
 }
 async function createGroupSchedule(tid){const db=competitionClient(supabase,activeEvent);
-  const [{data:groups,error:ge},{data:links,error:le}]=await Promise.all([
+  const [{data:groups,error:ge},{data:links,error:le},{data:registered,error:re}]=await Promise.all([
     db.from('groups').select('*').eq('tournament_id',tid).order('group_order'),
-    db.from('group_teams').select('*')
+    db.from('group_teams').select('*'),
+    db.from('teams').select('id').eq('tournament_id',tid)
   ]);
-  if(ge)throw ge;if(le)throw le;
+  if(ge)throw ge;if(le)throw le;if(re)throw re;
   const gids=(groups||[]).map(g=>g.id), valid=(links||[]).filter(x=>gids.includes(x.group_id));
   if(!groups?.length)throw new Error('Chưa có bảng.');
+  const missing=(registered||[]).filter(t=>!valid.some(l=>l.team_id===t.id));
+  if(missing.length)throw new Error(`Vẫn còn ${missing.length} VĐV/đội chưa có bảng.`);
   const {error:deleteError}=await db.from('matches').delete().eq('tournament_id',tid).eq('stage','group');
   if(deleteError)throw deleteError;
   const rows=[];
@@ -876,19 +879,44 @@ async function showGroups(tid){const db=competitionClient(supabase,activeEvent);
   }
   const freshGroups=(await db.from('groups').select('*').eq('tournament_id',tid).order('group_order')).data||[];
   const gids=freshGroups.map(g=>g.id);
-  const {data:allLinks}=gids.length?await db.from('group_teams').select('*').in('group_id',gids):{data:[]};
+  const {data:allLinks,error:linkError}=gids.length?await db.from('group_teams').select('*').in('group_id',gids):{data:[]};
+  if(linkError)throw linkError;
   if(epoch!==renderEpoch)return;
   const links=allLinks||[], tm=Object.fromEntries((teams||[]).map(t=>[t.id,t]));
+  const unassigned=(teams||[]).filter(t=>!links.some(l=>l.team_id===t.id));
   const counts=freshGroups.map(g=>links.filter(x=>x.group_id===g.id).length);
   const maxGroups=Math.max(1,(teams||[]).length);
   document.querySelector('#workcontent').innerHTML=`<div class="page-kicker">CHIA BẢNG</div><div class="groups-title"><div><h1>${esc(currentTournament.name)}</h1><p>${teams.length} đội · Chọn số bảng, hệ thống tự chia đều.</p></div></div>
-  <div class="panel group-control"><div class="group-control-main"><label>Số bảng<input id="groupCount" type="number" min="1" max="${maxGroups}" value="${Math.max(1,freshGroups.length)}"></label><div class="balance-preview">Phân bổ hiện tại: <b>${counts.length?counts.join(' · '):teams.length}</b> đội</div></div><div class="group-actions"><button id="divideGroups">🎲 Xáo & chia đều</button><button class="ghost" id="reshuffleGroups">Xáo lại</button><button id="lockGroups">✓ Chốt bảng & tạo lịch</button></div></div>
-  <div class="group-board">${freshGroups.map(g=>{const gl=links.filter(x=>x.group_id===g.id);return `<section class="group-column"><div class="group-column-head"><div><small>BẢNG</small><h2>${esc(g.name)}</h2></div><span>${gl.length} đội ${readinessBadge(gl.map(x=>tm[x.team_id]).filter(Boolean))}</span></div><div class="group-team-list">${gl.map((x,i)=>`<div class="group-team"><span class="team-index">${i+1}</span><b>${esc(tm[x.team_id]?.name||'Đội')}</b><select data-move-team="${x.team_id}" data-from="${g.id}" aria-label="Chuyển đội ${esc(tm[x.team_id]?.name||'')}">${freshGroups.map(dest=>`<option value="${dest.id}" ${dest.id===g.id?'selected':''}>Bảng ${esc(dest.name)}</option>`).join('')}</select></div>`).join('')||'<div class="group-empty">Chưa có đội</div>'}</div></section>`}).join('')}</div>`;
+  <div class="panel group-control"><div class="group-control-main"><label>Số bảng<input id="groupCount" type="number" min="1" max="${maxGroups}" value="${Math.max(1,freshGroups.length)}"></label><div class="balance-preview">Phân bổ hiện tại: <b>${counts.length?counts.join(' · '):teams.length}</b> đội</div></div><div class="group-actions"><button id="divideGroups">CHIA BẢNG TỰ ĐỘNG</button><button id="manualGroups">TỰ CHIA BẢNG</button><button class="ghost" id="reshuffleGroups">Xáo lại</button><button id="lockGroups" ${unassigned.length?'disabled':''}>XÁC NHẬN CHIA BẢNG & TẠO TRẬN</button></div></div>
+  <p>${teams.length} ĐỘI · ${freshGroups.length} BẢNG · ${teams.length-unassigned.length} ĐÃ XẾP · ${unassigned.length} CHƯA CÓ BẢNG</p>${unassigned.length?`<p role="alert">⚠️ CÒN ${unassigned.length} ĐỘI CHƯA CÓ BẢNG</p>`:''}
+  <div class="group-board">${freshGroups.map(g=>{const gl=links.filter(x=>x.group_id===g.id);return `<section class="group-column"><div class="group-column-head"><div><small>BẢNG</small><h2>${esc(g.name)}</h2></div><span>${gl.length} đội ${readinessBadge(gl.map(x=>tm[x.team_id]).filter(Boolean))}</span></div><div class="group-team-list">${gl.map((x,i)=>`<div class="group-team"><span class="team-index">${i+1}</span><b>${esc(tm[x.team_id]?.name||'Đội')}</b><label style="grid-column:2;margin:0">CHUYỂN BẢNG<select data-move-team="${x.team_id}" data-from="${g.id}" title="CHUYỂN BẢNG" aria-label="CHUYỂN BẢNG · ${esc(tm[x.team_id]?.name||'')}"><option value="">ĐƯA RA CHƯA CÓ BẢNG</option>${freshGroups.map(dest=>`<option value="${dest.id}" ${dest.id===g.id?'selected':''}>Bảng ${esc(dest.name)}</option>`).join('')}</select></label></div>`).join('')||'<div class="group-empty">Chưa có đội</div>'}</div></section>`}).join('')}</div><section class="panel"><h2>VĐV / ĐỘI CHƯA CÓ BẢNG</h2>${unassigned.map(t=>`<div class="team-line"><b>${esc(t.name)}</b><select data-assign-team="${t.id}" aria-label="Chọn bảng cho ${esc(t.name)}"><option value="">CHỌN BẢNG ▼</option>${freshGroups.map(g=>`<option value="${g.id}">Bảng ${esc(g.name)}</option>`).join('')}</select></div>`).join('')||'<p>Tất cả đã có bảng.</p>'}</section>`;
+  document.querySelector('#manualGroups').onclick=()=>{
+    const modal=document.querySelector('#modal');
+    modal.innerHTML=`<div class="overlay"><form class="modal"><h2>TẠO BẢNG THỦ CÔNG</h2><label>Số bảng cần tạo:<input name="count" type="number" min="1" max="${maxGroups}" step="1" value="${Math.min(5,maxGroups)}" required></label><p>Thay thế bảng hiện tại và lịch vòng bảng chưa thi đấu của nội dung này.</p><p role="alert"></p><div class="actions"><button type="button" class="secondary">HỦY</button><button type="submit">TẠO BẢNG</button></div></form></div>`;
+    const form=modal.querySelector('form');form.querySelector('[type=button]').onclick=()=>{if(!form.querySelector('[type=submit]').disabled)modal.innerHTML=''};
+    form.onsubmit=async e=>{
+      e.preventDefault();if(epoch!==renderEpoch)return;
+      const count=Number(form.elements.count.value),button=form.querySelector('[type=submit]');
+      if(!Number.isInteger(count)||count<1||count>maxGroups){form.querySelector('[role=alert]').textContent=`Nhập số bảng nguyên từ 1 đến ${maxGroups}.`;return}
+      button.disabled=true;
+      try{
+        const {data:existing,error}=await db.from('matches').select('id').or('status.neq.scheduled,stage.neq.group,started_at.not.is.null');if(error)throw error;
+        if(existing?.length)throw Error('Nội dung đã có trận bắt đầu. Không thể tạo lại bảng.');
+        await saveGroupDistribution(tid,count,teams.map(t=>t.id),false,true);
+        modal.innerHTML='';if(epoch===renderEpoch)await showGroups(tid);
+      }catch(error){form.querySelector('[role=alert]').textContent=error.message;button.disabled=false}
+    };
+  };
+  document.querySelectorAll('[data-assign-team]').forEach(sel=>sel.onchange=async()=>{
+    if(!sel.value||epoch!==renderEpoch)return;sel.disabled=true;
+    const {error}=await db.from('group_teams').insert({group_id:sel.value,team_id:sel.dataset.assignTeam});
+    if(error){alert(error.message);sel.disabled=false;return}if(epoch===renderEpoch)await showGroups(tid);
+  });
   const run=async(shuffle=true)=>{const b=document.querySelector(shuffle?'#divideGroups':'#reshuffleGroups');try{b.disabled=true;b.textContent='Đang chia…';await saveGroupDistribution(tid,+document.querySelector('#groupCount').value,(teams||[]).map(x=>x.id),true);if(epoch===renderEpoch)await showGroups(tid)}catch(e){alert(e.message);b.disabled=false}};
   document.querySelector('#divideGroups').onclick=()=>run(true);
   document.querySelector('#reshuffleGroups').onclick=()=>run(false);
-  document.querySelectorAll('[data-move-team]').forEach(sel=>sel.onchange=async()=>{const teamId=sel.dataset.moveTeam,from=sel.dataset.from,to=sel.value;if(from===to)return;const {error}=await db.from('group_teams').update({group_id:to}).eq('group_id',from).eq('team_id',teamId);if(error)return alert(error.message);if(epoch===renderEpoch)await showGroups(tid)});
-  document.querySelector('#lockGroups').onclick=async()=>{const b=document.querySelector('#lockGroups');try{b.disabled=true;b.textContent='Đang tạo lịch…';await createGroupSchedule(tid);if(epoch===renderEpoch)await workspace(tid,'matches')}catch(e){alert(e.message);b.disabled=false;b.textContent='✓ Chốt bảng & tạo lịch'}};
+  document.querySelectorAll('[data-move-team]').forEach(sel=>sel.onchange=async()=>{const teamId=sel.dataset.moveTeam,from=sel.dataset.from,to=sel.value;if(from===to)return;sel.disabled=true;const query=to?db.from('group_teams').update({group_id:to}):db.from('group_teams').delete();const {error}=await query.eq('group_id',from).eq('team_id',teamId);if(error){sel.disabled=false;sel.value=from;return alert(error.message)}if(epoch===renderEpoch)await showGroups(tid)});
+  document.querySelector('#lockGroups').onclick=async()=>{const b=document.querySelector('#lockGroups');try{b.disabled=true;if(unassigned.length)throw Error(`Vẫn còn ${unassigned.length} VĐV/đội chưa có bảng.`);if(!confirm('Xác nhận chia bảng & tạo trận cho nội dung này?')){b.disabled=false;return}b.textContent='Đang tạo lịch…';await createGroupSchedule(tid);if(epoch===renderEpoch)await workspace(tid,'matches')}catch(e){alert(e.message);b.disabled=false;b.textContent='XÁC NHẬN CHIA BẢNG & TẠO TRẬN'}};
 }
 
 function fairMatchOrder(matches){

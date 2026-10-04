@@ -37,12 +37,29 @@ export async function mountOperations({client,event,tournament,tab,allowed,isCur
  const draw=data=>{
   const {teams,groups,links,members,matches,pm}=data,tm=Object.fromEntries(teams.map(t=>[t.id,t]));
   const groupTeams=g=>links.filter(l=>l.group_id===g.id).map(l=>tm[l.team_id]).filter(Boolean);
-  const groupSummary=()=>`<div class="ops-grid">${groups.map(g=>{const ts=groupTeams(g),r=readiness(ts);return `<article class="panel"><b>BẢNG ${esc(g.name)}</b> · ${r.count}/${r.total}<p>${readinessBadge(ts)}</p>${r.ready?'':`<small>${r.total?`⚠ THIẾU ${r.total-r.count}`:'Chưa có đội'}</small>`}</article>`}).join('')||'<p>Chưa chia bảng.</p>'}</div>`;
+  const groupSummary=()=>`<div class="ops-grid">${groups.map(g=>{const ts=groupTeams(g),r=readiness(ts);return `<article class="panel"><b>BẢNG ${esc(g.name)}</b> · ${tab==='checkin'&&r.ready?'ĐÃ ĐỦ':`${r.count}/${r.total}`}<p>${readinessBadge(ts)}</p>${r.ready?'':`<small>${r.total?`⚠ THIẾU ${r.total-r.count}`:'Chưa có đội'}</small>`}</article>`}).join('')||'<p>Chưa chia bảng.</p>'}</div>`;
   host.innerHTML=`<div class="operations"><h1>${tab==='checkin'?'CHECK-IN':'ĐIỀU HÀNH'}</h1><p>${esc(event.name)} · Tự cập nhật mỗi 15 giây</p><p data-ops-error role="alert"></p><div data-ops-body></div></div>`;
   const body=host.querySelector('[data-ops-body]');
   if(tab==='checkin'){
    const r=readiness(teams),percent=r.total?Math.round(r.count/r.total*100):0;
-   body.innerHTML=`<div class="panel"><h2>${r.count} / ${r.total} ĐỘI ĐÃ CHECK-IN</h2><progress max="100" value="${percent}" aria-label="Tiến độ check-in"></progress> ${percent}%</div>${groupSummary()}<div class="ops-tools"><input type="search" placeholder="Tìm VĐV / đội..." aria-label="Tìm VĐV / đội" value="${esc(search)}"><div class="actions">${[['all','TẤT CẢ'],['no','CHƯA CHECK-IN'],['yes','ĐÃ CHECK-IN']].map(([v,l])=>`<button data-filter="${v}" class="${v===filter?'':'secondary'}" aria-pressed="${v===filter}">${l}</button>`).join('')}</div></div><div data-team-list></div>`;
+   body.innerHTML=`<div class="panel"><h2>${r.count} / ${r.total} ĐỘI ĐÃ CHECK-IN</h2><progress max="100" value="${percent}" aria-label="Tiến độ check-in"></progress> ${percent}%</div><button data-check-all>✓ ĐÃ ĐỦ TẤT CẢ</button>${groupSummary()}<div class="ops-tools"><input type="search" placeholder="Tìm VĐV / đội..." aria-label="Tìm VĐV / đội" value="${esc(search)}"><div class="actions">${[['all','TẤT CẢ'],['no','CHƯA CHECK-IN'],['yes','ĐÃ CHECK-IN']].map(([v,l])=>`<button data-filter="${v}" class="${v===filter?'':'secondary'}" aria-pressed="${v===filter}">${l}</button>`).join('')}</div></div><div data-team-list></div>`;
+   body.querySelector('[data-check-all]').onclick=()=>{
+    if(busy||!allowed()||!isCurrent())return;
+    const modal=document.querySelector('#modal');
+    modal.innerHTML='<div class="overlay"><div class="modal" role="dialog" aria-modal="true" aria-label="CHECK-IN TẤT CẢ"><p>Xác nhận tất cả VĐV/đội của nội dung này đã có mặt?</p><p role="alert"></p><div class="actions"><button data-cancel class="secondary">HỦY</button><button data-confirm>XÁC NHẬN ĐÃ ĐỦ</button></div></div></div>';
+    modal.querySelector('[data-cancel]').onclick=()=>{if(!busy)modal.innerHTML=''};
+    modal.querySelector('[data-confirm]').onclick=async()=>{
+     if(busy||!allowed()||!isCurrent())return;busy=true;
+     modal.querySelectorAll('button').forEach(b=>b.disabled=true);
+     try{
+      const {error}=await db.from('teams').update({checked_in:true,checked_in_at:new Date().toISOString()}).eq('tournament_id',tournament.id).or('checked_in.eq.false,checked_in.is.null');
+      if(error)throw error;
+      modal.innerHTML='';
+     }catch(e){modal.querySelector('[role=alert]').textContent=e.message}
+     finally{busy=false;modal.querySelectorAll('button').forEach(b=>b.disabled=false)}
+     await refresh();
+    };
+   };
    const list=()=>{
     const assigned=new Set(links.map(l=>l.team_id)),sections=[...groups.map(g=>({name:`BẢNG ${g.name}`,teams:groupTeams(g)})),{name:'CHƯA CHIA BẢNG',teams:teams.filter(t=>!assigned.has(t.id))}];
     body.querySelector('[data-team-list]').innerHTML=sections.map(g=>{

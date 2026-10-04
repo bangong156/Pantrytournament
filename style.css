@@ -479,3 +479,8 @@ body:has(#app > .public-home-header) #homepageGuide{position:sticky;top:14px}
   body:has(#app > :is(.public-home-header,.dashboard-header)) #homepageGuide{grid-column:3;grid-row:1;margin:8px 0 8px 12px;position:static}
   body:has(#app > :is(.public-home-header,.dashboard-header)) #app > header > :last-child{grid-column:2/4;grid-row:2;flex-wrap:wrap;justify-content:flex-end;max-width:100%;padding:0 0 10px;overflow-wrap:anywhere}
 }
+
+/* Tournament group assignment touch controls. */
+.group-team{grid-template-columns:30px minmax(0,1fr)}
+.group-team select{grid-column:2;width:100%;min-height:44px;font-size:14px}
+[data-assign-team]{min-height:44px;max-width:100%}

@@ -81,19 +81,35 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
     if(event.format!=='doubles'){controls.textContent='MLP knockout chưa được bật. MLP hiện tại tiếp tục hoạt động như trước.';return}
     if(started){controls.textContent='Knockout đã bắt đầu. Không thể tạo lại nhánh.';return}
     if(matches.length&&!managed){controls.textContent='Nhánh cũ chưa được quản lý. Không tự động thay thế hoặc nhận nhánh cũ.';return}
-    controls.innerHTML=`<button id="koPreviewButton">${managed?'Xem trước tạo lại Knockout':'Xem trước Knockout từ BXH'}</button><p role="alert"></p>`;
+    controls.innerHTML=`<button id="koPreviewButton">⚡ TỰ VẼ NHÁNH KNOCKOUT</button><p role="alert"></p>`;
     controls.querySelector('button').onclick=async()=>{
       const b=controls.querySelector('button');b.disabled=true;
       try{
         // Capture before standings: any changed group inputs invalidate generation.
         const inputs=await rpc('pantry_knockout_inputs');if(!isCurrent())return;
         const standings=await standingsData();if(!isCurrent())return;
+        const incomplete=[];
+        for(const {group,rows} of standings){
+          const gm=inputs.matches.filter(m=>m.group_id===group.id);
+          const missing=[];
+          for(let i=0;i<rows.length;i++)for(let j=i+1;j<rows.length;j++){
+            const pair=gm.filter(m=>[m.team1_id,m.team2_id].includes(rows[i].id)&&[m.team1_id,m.team2_id].includes(rows[j].id));
+            if(pair.length!==1||pair[0].status!=='completed'||pair[0].team1_score==null||pair[0].team2_score==null||![pair[0].team1_id,pair[0].team2_id].includes(pair[0].winner_id))missing.push(`${rows[i].name} – ${rows[j].name}`);
+          }
+          if(rows.length<2||missing.length)incomplete.push(`Bảng ${group.name}: ${missing.join('; ')||'chưa đủ đội'}`);
+        }
+        const registered=teamResult.data||[];
+        const unassigned=registered.filter(t=>!inputs.links.some(l=>l.team_id===t.id));
+        if(unassigned.length)incomplete.push(`${unassigned.length} VĐV/đội chưa có bảng`);
+        if(incomplete.length)throw Error('Chưa xác định được suất Knockout. '+incomplete.join(' · '));
         let draws=decision?.snapshot?.draws||[],revision=decision?.revision||0;
         const preview=host.querySelector('#koPreview');
+        let redraw=false;
+        const shuffle=items=>{const out=[...items];for(let i=out.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[out[i],out[j]]=[out[j],out[i]]}return out};
         const paint=()=>{
           const result=qualify(standings,draws);result.snapshot.input_state=inputs;
-          const nodes=result.unresolved.length?[]:buildBracket(result);
-          preview.innerHTML=`<div class="panel"><h2>${result.group_count===5?'VÀO THẲNG TỨ KẾT':`${result.qualifiers.length} ĐỘI VÀO VÒNG LOẠI`}</h2>${[['group_winner',result.group_count===5?'VÀO THẲNG TỨ KẾT':'NHẤT BẢNG'],['runner_up','NHÌ BẢNG'],['wildcard_third','VÉ VỚT HẠNG 3']].map(([type,label])=>`<h3>${label}</h3><ul>${result.qualifiers.filter(q=>q.qualification_type===type&&!result.unresolved.some(t=>t.teams.some(x=>x.team_id===q.team_id))).map(q=>`<li>${esc(q.group_name)}${q.group_position} · ${esc(q.name)}${q.group_position===3?` · ${q.point_difference>0?'+':''}${q.point_difference} / ${q.points_scored} điểm`:''}</li>`).join('')}</ul>`).join('')}${result.unresolved.map((tie,i)=>`<fieldset><legend>Đồng hạng vé vớt: chọn thứ tự bốc thăm (${tie.slots} suất)</legend><p>Hiệu số ${tie.point_difference} · Tổng điểm ${tie.points_scored}. Nhập thứ tự đầy đủ, không trùng.</p>${tie.teams.map((q,j)=>`<label>${esc(q.group_name)}3 · ${esc(q.name)}<input data-draw="${i}" data-team="${esc(q.team_id)}" type="number" min="1" max="${tie.teams.length}" placeholder="Thứ tự"></label>`).join('')}<button data-resolve="${i}">Xác nhận thứ tự bốc thăm</button></fieldset>`).join('')}${nodes.length?publicBracket(nodes,names):''}<p role="alert" id="koError"></p>${nodes.length?`<button id="koGenerate">${managed?'TẠO LẠI NHÁNH KNOCKOUT':'TẠO NHÁNH KNOCKOUT'}</button>`:''}</div>`;
+          const nodes=result.unresolved.length?[]:buildBracket(redraw?{...result,qualifiers:shuffle(result.qualifiers),snapshot:{...result.snapshot,standings:shuffle(result.snapshot.standings)}}:result);
+          preview.innerHTML=`<div class="panel"><h2>XEM TRƯỚC NHÁNH KNOCKOUT</h2><h3>${result.group_count===5?'VÀO THẲNG TỨ KẾT':`${result.qualifiers.length} ĐỘI VÀO VÒNG LOẠI`}</h3>${[['group_winner',result.group_count===5?'VÀO THẲNG TỨ KẾT':'NHẤT BẢNG'],['runner_up','NHÌ BẢNG'],['wildcard_third','VÉ VỚT HẠNG 3']].map(([type,label])=>`<h3>${label}</h3><ul>${result.qualifiers.filter(q=>q.qualification_type===type&&!result.unresolved.some(t=>t.teams.some(x=>x.team_id===q.team_id))).map(q=>`<li>${esc(q.group_name)}${q.group_position} · ${esc(q.name)}${q.group_position===3?` · ${q.point_difference>0?'+':''}${q.point_difference} / ${q.points_scored} điểm`:''}</li>`).join('')}</ul>`).join('')}${result.unresolved.map((tie,i)=>`<fieldset><legend>Đồng hạng vé vớt: chọn thứ tự bốc thăm (${tie.slots} suất)</legend><p>Hiệu số ${tie.point_difference} · Tổng điểm ${tie.points_scored}. Nhập thứ tự đầy đủ, không trùng.</p>${tie.teams.map((q,j)=>`<label>${esc(q.group_name)}3 · ${esc(q.name)}<input data-draw="${i}" data-team="${esc(q.team_id)}" type="number" min="1" max="${tie.teams.length}" placeholder="Thứ tự"></label>`).join('')}<button data-resolve="${i}">Xác nhận thứ tự bốc thăm</button></fieldset>`).join('')}${nodes.length?publicBracket(nodes,Object.fromEntries(result.qualifiers.map(q=>[q.team_id,`${q.group_name}${q.group_position} · ${q.name}`]))):''}<p role="alert" id="koError"></p>${nodes.length?`<button id="koRedraw" class="secondary">VẼ LẠI</button><button id="koGenerate">XÁC NHẬN NHÁNH</button>`:''}</div>`;
           preview.querySelectorAll('[data-resolve]').forEach(button=>button.onclick=async()=>{
             const i=Number(button.dataset.resolve),tie=result.unresolved[i],items=[...preview.querySelectorAll(`[data-draw="${i}"]`)].map(input=>({id:input.dataset.team,rank:Number(input.value)}));
             if(items.some(x=>!Number.isInteger(x.rank)||x.rank<1||x.rank>items.length)||new Set(items.map(x=>x.rank)).size!==items.length){preview.querySelector('#koError').textContent='Cần nhập đầy đủ thứ tự 1 đến '+items.length;return}
@@ -101,11 +117,12 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
             button.disabled=true;
             try{
               const resolved=qualify(standings,nextDraws);resolved.snapshot.input_state=inputs;
-              if(!managed)revision=await rpc('pantry_knockout_resolve',{p_expected_revision:revision,p_snapshot:resolved.snapshot});
               draws=nextDraws;if(isCurrent())paint();
             }catch(error){preview.querySelector('#koError').textContent=error.message;button.disabled=false}
           });
+          const redrawButton=preview.querySelector('#koRedraw');if(redrawButton)redrawButton.onclick=()=>{redraw=true;paint()};
           const generate=preview.querySelector('#koGenerate');if(generate)generate.onclick=async()=>{
+            if(!isCurrent())return;
             if(!confirm(managed?'Xác nhận thay thế toàn bộ nhánh Knockout chưa bắt đầu của nội dung này?':'Xác nhận tạo nhánh Knockout theo bản xem trước?'))return;
             generate.disabled=true;
             try{
