@@ -81,6 +81,35 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
     if(event.format!=='doubles'){controls.textContent='MLP knockout chưa được bật. MLP hiện tại tiếp tục hoạt động như trước.';return}
     if(started){controls.textContent='Knockout đã bắt đầu. Không thể tạo lại nhánh.';return}
     if(matches.length&&!managed){controls.textContent='Nhánh cũ chưa được quản lý. Không tự động thay thế hoặc nhận nhánh cũ.';return}
+    // Save symbolic group pairings before round-robin results exist.
+    const groupInput=await rpc('pantry_knockout_inputs');
+    const planGroups=(groupInput.groups||[]).slice().sort((a,b)=>a.group_order-b.group_order);
+    if(planGroups.length===4){
+      const {data:savedPlan,error:planError}=await client.rpc('pantry_knockout_preplan_get',{p_event:event.id});
+      if(planError)throw planError;
+      const idToName=Object.fromEntries(planGroups.map(g=>[g.id,g.name]));
+      let pairings=Array.isArray(savedPlan)&&savedPlan.length===2?savedPlan: [[planGroups[0].id,planGroups[2].id],[planGroups[1].id,planGroups[3].id]];
+      const options=planGroups.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('');
+      const symbolic=()=>pairings.flatMap(([a,b])=>[[`Nhất ${idToName[a]}`,`Nhì ${idToName[b]}`],[`Nhất ${idToName[b]}`,`Nhì ${idToName[a]}`]]);
+      const plan=document.createElement('section');plan.className='panel';plan.id='koPreplan';
+      const paintPlan=()=>{
+        plan.innerHTML=`<h2>VẼ NHÁNH TRƯỚC VÒNG BẢNG</h2><p>4 bảng · 8 đội vào Tứ kết. Chọn hai cặp bảng đối đầu, mỗi bảng chỉ được chọn một lần.</p>
+          <div class="ko-pairings">${pairings.map(([a,b],i)=>`<label>Cặp bảng ${i+1} <select data-pair="${i}" data-side="0">${options}</select> ↔ <select data-pair="${i}" data-side="1">${options}</select></label>`).join('')}</div>
+          <h3>XEM TRƯỚC TỨ KẾT</h3><div class="ko-preplan-grid">${symbolic().map((x,i)=>`<div class="ko-preplan-match"><strong>TỨ KẾT ${i+1}</strong><div>${esc(x[0])}</div><div>${esc(x[1])}</div></div>`).join('')}</div>
+          <p>Tứ kết → Bán kết → Chung kết. Tên đội sẽ được xác định theo BXH sau khi vòng bảng kết thúc.</p>
+          <button id="koSavePreplan">LƯU NHÁNH THEO BẢNG</button><p role="alert" id="koPreplanError"></p>`;
+        plan.querySelectorAll('select').forEach(el=>{el.value=pairings[Number(el.dataset.pair)][Number(el.dataset.side)];el.onchange=()=>{pairings[Number(el.dataset.pair)][Number(el.dataset.side)]=el.value;paintPlan()}});
+        plan.querySelector('#koSavePreplan').onclick=async()=>{
+          const flat=pairings.flat();
+          const error=plan.querySelector('#koPreplanError');
+          if(new Set(flat).size!==4){error.textContent='Mỗi bảng phải xuất hiện đúng một lần.';return}
+          const button=plan.querySelector('#koSavePreplan');button.disabled=true;
+          try{const {error:e}=await client.rpc('pantry_knockout_preplan_save',{p_event:event.id,p_pairings:pairings});if(e)throw e;error.textContent='Đã lưu nhánh theo bảng. Khi hoàn tất vòng bảng, chọn TỰ VẼ NHÁNH để xác nhận đội và tạo trận.'}
+          catch(e){error.textContent=e.message}finally{button.disabled=false}
+        };
+      };
+      paintPlan();controls.before(plan);
+    }
     controls.innerHTML=`<button id="koPreviewButton">⚡ TỰ VẼ NHÁNH KNOCKOUT</button><p role="alert"></p>`;
     controls.querySelector('button').onclick=async()=>{
       const b=controls.querySelector('button');b.disabled=true;
