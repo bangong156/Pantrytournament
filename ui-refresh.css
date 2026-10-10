@@ -30,3 +30,14 @@ header{height:76px;padding:0 max(32px,calc((100vw - 1480px)/2));display:flex;ali
 .match-group-head{background:#f3f1e8;color:#26331d}
 .match-group-head h2{color:#26331d}
 .match-group-head p,.match-group-head span{color:#626b56}
+
+/* Knockout group pairing planner */
+#koPreplan{margin-block:18px;border:1px solid #d8dfc9;border-radius:18px;background:#f8f7f0;padding:22px;color:#28351e}
+#koPreplan h2,#koPreplan h3{color:#28351e}
+.ko-pairings{display:flex;flex-wrap:wrap;gap:12px;margin:18px 0}
+.ko-pairings label{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:12px;border-radius:12px;background:white}
+.ko-pairings select{width:auto;min-width:100px;background:#fff;color:#28351e;border:1px solid #b9c5aa;border-radius:8px;padding:8px}
+.ko-preplan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:14px 0}
+.ko-preplan-match{background:#fff;border:1px solid #d8dfc9;border-radius:12px;padding:14px;display:grid;gap:7px}
+.ko-preplan-match strong{font-size:11px;letter-spacing:.06em;color:#61734b}
+.ko-preplan-match div{padding:8px 10px;background:#f3f3ed;border-radius:7px;color:#28351e}
