@@ -84,9 +84,11 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
     // Save symbolic group pairings before round-robin results exist.
     const groupInput=await rpc('pantry_knockout_inputs');
     const planGroups=(groupInput.groups||[]).slice().sort((a,b)=>a.group_order-b.group_order);
+    let knockoutPreplan=null;
     if(planGroups.length===4){
       const {data:savedPlan,error:planError}=await client.rpc('pantry_knockout_preplan_get',{p_event:event.id});
       if(planError)throw planError;
+      knockoutPreplan=savedPlan;
       const idToName=Object.fromEntries(planGroups.map(g=>[g.id,g.name]));
       let pairings=Array.isArray(savedPlan)&&savedPlan.length===2?savedPlan: [[planGroups[0].id,planGroups[2].id],[planGroups[1].id,planGroups[3].id]];
       const options=planGroups.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('');
@@ -104,7 +106,7 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
           const error=plan.querySelector('#koPreplanError');
           if(new Set(flat).size!==4){error.textContent='Mỗi bảng phải xuất hiện đúng một lần.';return}
           const button=plan.querySelector('#koSavePreplan');button.disabled=true;
-          try{const {error:e}=await client.rpc('pantry_knockout_preplan_save',{p_event:event.id,p_pairings:pairings});if(e)throw e;error.textContent='Đã lưu nhánh theo bảng. Khi hoàn tất vòng bảng, chọn TỰ VẼ NHÁNH để xác nhận đội và tạo trận.'}
+          try{const {error:e}=await client.rpc('pantry_knockout_preplan_save',{p_event:event.id,p_pairings:pairings});if(e)throw e;knockoutPreplan=pairings.map(p=>[...p]);error.textContent='Đã lưu nhánh theo bảng. Khi hoàn tất vòng bảng, chọn TỰ VẼ NHÁNH để xác nhận đội và tạo trận.'}
           catch(e){error.textContent=e.message}finally{button.disabled=false}
         };
       };
@@ -137,7 +139,7 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
         const shuffle=items=>{const out=[...items];for(let i=out.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[out[i],out[j]]=[out[j],out[i]]}return out};
         const paint=()=>{
           const result=qualify(standings,draws);result.snapshot.input_state=inputs;
-          const nodes=result.unresolved.length?[]:buildBracket(redraw?{...result,qualifiers:shuffle(result.qualifiers),snapshot:{...result.snapshot,standings:shuffle(result.snapshot.standings)}}:result);
+          const nodes=result.unresolved.length?[]:buildBracket(redraw&&!knockoutPreplan?{...result,qualifiers:shuffle(result.qualifiers),snapshot:{...result.snapshot,standings:shuffle(result.snapshot.standings)}}:result,knockoutPreplan);
           preview.innerHTML=`<div class="panel"><h2>XEM TRƯỚC NHÁNH KNOCKOUT</h2><h3>${result.group_count===5?'VÀO THẲNG TỨ KẾT':`${result.qualifiers.length} ĐỘI VÀO VÒNG LOẠI`}</h3>${[['group_winner',result.group_count===5?'VÀO THẲNG TỨ KẾT':'NHẤT BẢNG'],['runner_up','NHÌ BẢNG'],['wildcard_third','VÉ VỚT HẠNG 3']].map(([type,label])=>`<h3>${label}</h3><ul>${result.qualifiers.filter(q=>q.qualification_type===type&&!result.unresolved.some(t=>t.teams.some(x=>x.team_id===q.team_id))).map(q=>`<li>${esc(q.group_name)}${q.group_position} · ${esc(q.name)}${q.group_position===3?` · ${q.point_difference>0?'+':''}${q.point_difference} / ${q.points_scored} điểm`:''}</li>`).join('')}</ul>`).join('')}${result.unresolved.map((tie,i)=>`<fieldset><legend>Đồng hạng vé vớt: chọn thứ tự bốc thăm (${tie.slots} suất)</legend><p>Hiệu số ${tie.point_difference} · Tổng điểm ${tie.points_scored}. Nhập thứ tự đầy đủ, không trùng.</p>${tie.teams.map((q,j)=>`<label>${esc(q.group_name)}3 · ${esc(q.name)}<input data-draw="${i}" data-team="${esc(q.team_id)}" type="number" min="1" max="${tie.teams.length}" placeholder="Thứ tự"></label>`).join('')}<button data-resolve="${i}">Xác nhận thứ tự bốc thăm</button></fieldset>`).join('')}${nodes.length?publicBracket(nodes,Object.fromEntries(result.qualifiers.map(q=>[q.team_id,`${q.group_name}${q.group_position} · ${q.name}`]))):''}<p role="alert" id="koError"></p>${nodes.length?`<button id="koRedraw" class="secondary">VẼ LẠI</button><button id="koGenerate">XÁC NHẬN NHÁNH</button>`:''}</div>`;
           preview.querySelectorAll('[data-resolve]').forEach(button=>button.onclick=async()=>{
             const i=Number(button.dataset.resolve),tie=result.unresolved[i],items=[...preview.querySelectorAll(`[data-draw="${i}"]`)].map(input=>({id:input.dataset.team,rank:Number(input.value)}));
