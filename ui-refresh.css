@@ -41,3 +41,8 @@ header{height:76px;padding:0 max(32px,calc((100vw - 1480px)/2));display:flex;ali
 .ko-preplan-match{background:#fff;border:1px solid #d8dfc9;border-radius:12px;padding:14px;display:grid;gap:7px}
 .ko-preplan-match strong{font-size:11px;letter-spacing:.06em;color:#61734b}
 .ko-preplan-match div{padding:8px 10px;background:#f3f3ed;border-radius:7px;color:#28351e}
+
+.match-reorder{display:inline-flex;gap:3px;margin:5px 0}
+.match-reorder button{min-width:28px;min-height:27px;border:1px solid #d6dacd;border-radius:6px;background:#fff;color:#29361f;font-weight:700;cursor:pointer;padding:2px 6px}
+.match-reorder button:disabled{opacity:.3;cursor:default}
+.match-reorder button:not(:disabled):hover{background:#e6eadc}
