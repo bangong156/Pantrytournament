@@ -65,8 +65,22 @@ export async function mountOperations({client,event,tournament,tab,allowed,isCur
     body.querySelector('[data-team-list]').innerHTML=sections.map(g=>{
      const visible=g.teams.filter(t=>(filter==='all'||t.checked_in===(filter==='yes'))&&`${t.name} ${members.filter(m=>m.team_id===t.id).map(m=>pm[m.player_id]).join(' ')}`.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi')));
      if(!visible.length)return '';const r=readiness(g.teams);
-     return `<section class="panel"><h2>${esc(g.name)} · ${r.count}/${r.total} CHECK-IN</h2>${readinessBadge(g.teams)}${visible.map(t=>`<article class="ops-team"><div><b>${t.checked_in?'✓':'○'} ${esc(t.name)}</b><p>${esc(members.filter(m=>m.team_id===t.id).map(m=>pm[m.player_id]).join(' · '))}</p><small>${t.checked_in?'ĐÃ CHECK-IN':'CHƯA CHECK-IN'}</small></div><div class="actions"><button data-check="${t.id}" class="${t.checked_in?'secondary':''}">${t.checked_in?'HỦY CHECK-IN':'CHECK-IN'}</button><button class="secondary" data-edit="${t.id}">SỬA VĐV</button></div></article>`).join('')}</section>`;
+     return `<section class="panel"><h2>${esc(g.name)} · ${r.count}/${r.total} CHECK-IN</h2>${readinessBadge(g.teams)}${visible.map(t=>`<article class="ops-team ${t.fee_paid?'ops-fee-paid':''}"><div><b class="ops-team-name">${t.checked_in?'✓':'○'} ${esc(t.name)}</b><p>${esc(members.filter(m=>m.team_id===t.id).map(m=>pm[m.player_id]).join(' · '))}</p><small>${t.checked_in?'ĐÃ CHECK-IN':'CHƯA CHECK-IN'}</small></div><div class="actions"><label class="ops-fee-toggle"><input type="checkbox" data-fee-paid="${t.id}" ${t.fee_paid?'checked':''}> Đã đóng lệ phí</label><button data-check="${t.id}" class="${t.checked_in?'secondary':''}">${t.checked_in?'HỦY CHECK-IN':'CHECK-IN'}</button><button class="secondary" data-edit="${t.id}">SỬA VĐV</button></div></article>`).join('')}</section>`;
     }).join('')||'<p>Không có đội phù hợp.</p>';
+    body.querySelectorAll('[data-fee-paid]').forEach(input=>input.onchange=async()=>{
+     if(busy||!allowed()||!isCurrent()){input.checked=!input.checked;return}
+     const team=tm[input.dataset.feePaid],paid=input.checked;
+     busy=true;input.disabled=true;
+     try{
+      const {data:saved,error}=await db.from('teams').update({fee_paid:paid}).eq('id',team.id).eq('tournament_id',tournament.id).select('id,fee_paid').single();
+      if(error)throw error;
+      Object.assign(team,saved);
+      if(isCurrent())draw(data);
+     }catch(e){
+      input.checked=!paid;
+      if(isCurrent())host.querySelector('[data-ops-error]').textContent=e.message;
+     }finally{busy=false;input.disabled=false}
+    });
     body.querySelectorAll('[data-check]').forEach(b=>b.onclick=async()=>{
      if(busy||!allowed()||!isCurrent())return;busy=true;b.disabled=true;
      const team=tm[b.dataset.check],checked=!team.checked_in;
