@@ -1,9 +1,79 @@
+import {createClient} from '@supabase/supabase-js';
+const db=createClient('https://duuklzzxpegptsarcbqq.supabase.co','sb_publishable_FmGKX67AD3M4QvCuL3dSyg_w0X5vIX9');
+const ROOM_KEY='pantry-quick-roundrobin-room';
+let roomCode=localStorage.getItem(ROOM_KEY)||'',roomVersion=0,saving=false,queued=false,blocked=false;
+const roomError=msg=>{$('roomError').textContent=msg||''};
+function showRoom(){
+ $('roomCodeInput').value=roomCode;
+ $('roomInfo').innerHTML=roomCode?'<b>Đang quản lý chung · Mã phòng: '+esc(roomCode)+'</b> <button type="button" class="secondary" id="copyRoom">Copy mã</button> <button type="button" class="secondary" id="leaveRoom">Rời phòng</button><p class="muted">Mọi thay đổi được đồng bộ qua Supabase. Không chia sẻ mã với người chỉ muốn xem.</p>':'<span class="muted">Chưa tham gia phòng chung. Dữ liệu hiện chỉ lưu trên thiết bị này.</span>';
+ $('copyRoom')?.addEventListener('click',()=>navigator.clipboard.writeText(roomCode).catch(()=>prompt('Sao chép mã phòng:',roomCode)));
+ $('leaveRoom')?.addEventListener('click',()=>{roomCode='';roomVersion=0;blocked=false;localStorage.removeItem(ROOM_KEY);showRoom();roomError('Đã rời phòng. Dữ liệu hiện tại được giữ trên máy.');});
+}
+async function loadRoom(){
+ if(!roomCode)return;
+ const {data,error}=await db.rpc('quick_rr_read',{p_code:roomCode});
+ if(error)throw error;
+ roomVersion=Number(data.version);state=data.state;localStorage.setItem(KEY,JSON.stringify(state));render();
+}
+async function pushRoom(){
+ if(!roomCode||saving||blocked)return;
+ saving=true;
+ try{
+  do{
+   queued=false;
+   const snapshot=JSON.parse(JSON.stringify(state));
+   const {data,error}=await db.rpc('quick_rr_save',{p_code:roomCode,p_state:snapshot,p_version:roomVersion});
+   if(error)throw error;
+   roomVersion=Number(data.version);
+   if(JSON.stringify(state)!==JSON.stringify(snapshot))queued=true;
+  }while(queued&&roomCode);
+  roomError('');
+ }catch(e){
+  blocked=true;
+  roomError('Không đồng bộ được: '+e.message+' · Tải lại phòng để nhận dữ liệu mới.');
+ }finally{saving=false}
+}
+$('createRoom').onclick=async()=>{
+ if(roomCode&&!confirm('Bạn đang ở phòng chung. Tạo phòng mới từ dữ liệu hiện tại?'))return;
+ const b=$('createRoom');b.disabled=true;roomError('');
+ try{
+  const {data,error}=await db.rpc('quick_rr_create',{p_state:state});
+  if(error)throw error;
+  roomCode=data.code;roomVersion=Number(data.version);blocked=false;
+  localStorage.setItem(ROOM_KEY,roomCode);showRoom();
+ }catch(e){roomError(e.message)}finally{b.disabled=false}
+};
+$('joinRoom').onclick=async()=>{
+ const code=$('roomCodeInput').value.trim().toLowerCase();
+ if(!/^[0-9a-f]{24}$/.test(code)){roomError('Mã phòng không hợp lệ.');return}
+ if(state.matches.length&&!confirm('Vào phòng sẽ thay dữ liệu hiện tại bằng dữ liệu chung của phòng. Tiếp tục?'))return;
+ const b=$('joinRoom');b.disabled=true;roomError('');
+ try{
+  const {data,error}=await db.rpc('quick_rr_read',{p_code:code});if(error)throw error;
+  roomCode=code;roomVersion=Number(data.version);state=data.state;blocked=false;
+  localStorage.setItem(ROOM_KEY,roomCode);localStorage.setItem(KEY,JSON.stringify(state));
+  showRoom();render();
+ }catch(e){roomError(e.message)}finally{b.disabled=false}
+};
+showRoom();
+if(roomCode)loadRoom().catch(e=>roomError('Không vào được phòng: '+e.message));
+setInterval(async()=>{
+ if(!roomCode||saving||blocked||document.activeElement?.matches('input[type=number],textarea'))return;
+ try{
+  const {data,error}=await db.rpc('quick_rr_read',{p_code:roomCode});if(error)throw error;
+  if(Number(data.version)>roomVersion){
+   roomVersion=Number(data.version);state=data.state;
+   localStorage.setItem(KEY,JSON.stringify(state));render();
+  }
+ }catch(e){roomError('Mất kết nối phòng: '+e.message)}
+},4000);
+
 const KEY='pantry-quick-rotating-partners-v2';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let state={names:[],matches:[]};
 try{const saved=JSON.parse(localStorage.getItem(KEY));if(saved&&Array.isArray(saved.names)&&Array.isArray(saved.matches))state=saved}catch{}
-const save=()=>localStorage.setItem(KEY,JSON.stringify(state));
+const save=()=>{localStorage.setItem(KEY,JSON.stringify(state));if(roomCode){queued=true;void pushRoom()}};
 function shuffle(items){const a=[...items];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function parseNames(text){
  const names=text.split(/\r?\n/).map(x=>x.replace(/^\s*(?:#\s*)?\d{1,4}\s*(?:[.)]|[-–—:]\s+|\t)\s*/,'').trim()).filter(Boolean);
