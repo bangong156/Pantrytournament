@@ -201,5 +201,5 @@ $('clearMatches').onclick=()=>{
 };
 $('generate').onclick=()=>generate();
 $('reshuffle').onclick=()=>generate(true);
-$('reset').onclick=()=>{if(!confirm('Xóa danh sách, lịch và kết quả Round Robin xoay partner trên trình duyệt này?'))return;state={names:[],matches:[]};localStorage.removeItem(KEY);$('names').value='';$('error').textContent='';render()};
+$('reset').onclick=()=>{if(!confirm('Xóa danh sách, lịch và kết quả Round Robin xoay partner trên trình duyệt này?'))return;state={names:[],matches:[]};save();$('names').value='';$('error').textContent='';render()};
 render();
