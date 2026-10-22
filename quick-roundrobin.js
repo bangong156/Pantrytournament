@@ -79,7 +79,7 @@ function render(){
  $('teams').innerHTML=state.names.map((name,i)=>'<div class="team"><b>VĐV '+(i+1)+'</b>'+esc(name)+'</div>').join('');
  const done=state.matches.filter(m=>m.sa!==''&&m.sb!==''&&m.sa!==m.sb).length;
  $('progress').textContent=done+' / '+state.matches.length+' trận có kết quả · '+(state.matches.length?Math.max(...state.matches.map(m=>m.round)):0)+' lượt · Ghép partner không trùng.';
- $('matches').innerHTML=Array.from({length:Math.max(...state.matches.map(m=>m.round))},(_,i)=>i+1).map(r=>'<div class="round">LƯỢT '+r+'</div>'+state.matches.filter(m=>m.round===r).map(m=>'<div class="match"><div>'+m.a.map(id=>esc(state.names[id])).join(' + ')+'</div><input type="number" min="0" max="999" step="1" aria-label="Điểm đội A" data-match="'+m.id+'" data-side="sa" value="'+esc(m.sa)+'"><span class="vs">:</span><input type="number" min="0" max="999" step="1" aria-label="Điểm đội B" data-match="'+m.id+'" data-side="sb" value="'+esc(m.sb)+'"><div class="right">'+m.b.map(id=>esc(state.names[id])).join(' + ')+'</div></div>').join('')).join('');
+ $('matches').innerHTML=Array.from({length:Math.max(...state.matches.map(m=>m.round))},(_,i)=>i+1).map(r=>'<div class="round">LƯỢT '+r+'</div>'+state.matches.filter(m=>m.round===r).map(m=>'<div class="match"><div>'+m.a.map(id=>esc(state.names[id])).join(' + ')+'</div><input type="number" min="0" max="999" step="1" aria-label="Điểm đội A" data-match="'+m.id+'" data-side="sa" value="'+esc(m.sa)+'"><span class="vs">:</span><input type="number" min="0" max="999" step="1" aria-label="Điểm đội B" data-match="'+m.id+'" data-side="sb" value="'+esc(m.sb)+'"><div class="right">'+m.b.map(id=>esc(state.names[id])).join(' + ')+'</div><button type="button" class="danger match-delete" data-delete-match="'+esc(m.id)+'">Xóa trận</button></div>').join('')).join('');
  $('matches').querySelectorAll('[data-delete-match]').forEach(button=>button.onclick=()=>{
   const match=state.matches.find(m=>m.id===button.dataset.deleteMatch);
   if(!match)return;
@@ -92,7 +92,7 @@ function render(){
   const value=input.value.trim();
   if(value!==''&&(!/^\d+$/.test(value)||Number(value)>999)){input.value=match[input.dataset.side];$('error').textContent='Điểm phải là số nguyên 0–999.';return}
   match[input.dataset.side]=value;$('error').textContent='';save();renderRanking();
-  $('progress').textContent=state.matches.filter(m=>m.sa!==''&&m.sb!==''&&m.sa!==m.sb).length+' / '+state.matches.length+' trận có kết quả · '+Math.max(...state.matches.map(m=>m.round))+' lượt.';
+  $('progress').textContent=state.matches.filter(m=>m.sa!==''&&m.sb!==''&&m.sa!==m.sb).length+' / '+state.matches.length+' trận có kết quả · '+(state.matches.length?Math.max(...state.matches.map(m=>m.round)):0)+' lượt.';
  }));
  renderRanking();
 }
