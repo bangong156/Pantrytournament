@@ -64,7 +64,7 @@ function generate(reshuffle=false){
  $('error').textContent='';
  try{
   const names=reshuffle?state.names:parseNames($('names').value);
-  if(state.matches.some(m=>m.sa!==''||m.sb!=='')&&!confirm('Xáo lại lịch sẽ xóa toàn bộ tỉ số đã nhập. Tiếp tục?'))return;
+  if(state.matches.length&&!confirm(state.matches.some(m=>m.sa!==''||m.sb!=='')?'Xếp lại lịch sẽ XÓA các trận cũ và toàn bộ tỉ số đã nhập. Tiếp tục?':'Xếp lại lịch sẽ thay thế toàn bộ trận đã xếp. Tiếp tục?'))return;
   state={names,matches:schedule(names)};save();render();
  }catch(e){$('error').textContent=e.message}
 }
@@ -73,12 +73,20 @@ function render(){
  const exists=state.names.length>0;
  ['teamsPanel','matchesPanel','rankingPanel'].forEach(id=>$(id).hidden=!exists);
  $('reshuffle').hidden=!exists;
+ $('clearMatches').hidden=!exists||state.matches.length===0;
  if(!exists)return;
  $('teamsPanel').querySelector('h2').textContent='2. VĐV tham gia';
  $('teams').innerHTML=state.names.map((name,i)=>'<div class="team"><b>VĐV '+(i+1)+'</b>'+esc(name)+'</div>').join('');
  const done=state.matches.filter(m=>m.sa!==''&&m.sb!==''&&m.sa!==m.sb).length;
- $('progress').textContent=done+' / '+state.matches.length+' trận có kết quả · '+Math.max(...state.matches.map(m=>m.round))+' lượt · Ghép partner không trùng.';
+ $('progress').textContent=done+' / '+state.matches.length+' trận có kết quả · '+(state.matches.length?Math.max(...state.matches.map(m=>m.round)):0)+' lượt · Ghép partner không trùng.';
  $('matches').innerHTML=Array.from({length:Math.max(...state.matches.map(m=>m.round))},(_,i)=>i+1).map(r=>'<div class="round">LƯỢT '+r+'</div>'+state.matches.filter(m=>m.round===r).map(m=>'<div class="match"><div>'+m.a.map(id=>esc(state.names[id])).join(' + ')+'</div><input type="number" min="0" max="999" step="1" aria-label="Điểm đội A" data-match="'+m.id+'" data-side="sa" value="'+esc(m.sa)+'"><span class="vs">:</span><input type="number" min="0" max="999" step="1" aria-label="Điểm đội B" data-match="'+m.id+'" data-side="sb" value="'+esc(m.sb)+'"><div class="right">'+m.b.map(id=>esc(state.names[id])).join(' + ')+'</div></div>').join('')).join('');
+ $('matches').querySelectorAll('[data-delete-match]').forEach(button=>button.onclick=()=>{
+  const match=state.matches.find(m=>m.id===button.dataset.deleteMatch);
+  if(!match)return;
+  if(!confirm((match.sa!==''||match.sb!=='')?'Trận này đã nhập tỉ số. Xóa trận sẽ xóa cả kết quả và cập nhật BXH. Tiếp tục?':'Xóa trận này khỏi lịch thi đấu?'))return;
+  state.matches=state.matches.filter(m=>m!==match);
+  save();render();
+ });
  $('matches').querySelectorAll('input').forEach(input=>input.addEventListener('change',()=>{
   const match=state.matches.find(m=>m.id===input.dataset.match);if(!match)return;
   const value=input.value.trim();
@@ -99,6 +107,24 @@ function renderRanking(){
  rows.sort((a,b)=>b.w-a.w||(b.pf-b.pa)-(a.pf-a.pa)||b.pf-a.pf||a.name.localeCompare(b.name,'vi'));
  $('ranking').innerHTML=rows.map((x,i)=>'<tr><td><b>'+(i+1)+'</b></td><td>'+esc(x.name)+'</td><td>'+x.played+'</td><td>'+x.w+'</td><td>'+x.l+'</td><td>'+x.pf+'</td><td>'+x.pa+'</td><td>'+(x.pf-x.pa>0?'+':'')+(x.pf-x.pa)+'</td></tr>').join('');
 }
+$('addPlayer').onclick=()=>{
+ $('error').textContent='';
+ const name=$('newPlayer').value.trim().replace(/^\s*(?:#\s*)?\d{1,4}\s*(?:[.)]|[-–—:]\s+|\t)\s*/,'').trim();
+ if(!name){$('error').textContent='Nhập tên người chơi mới.';return}
+ const names=state.names.length?[...state.names]:$('names').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+ try{
+  const updated=parseNames([...names,name].join('\n'));
+  if(state.matches.length&&!confirm(state.matches.some(m=>m.sa!==''||m.sb!=='')?'Thêm người sẽ xếp lại toàn bộ trận và XÓA các tỉ số hiện tại. Tiếp tục?':'Thêm người sẽ xếp lại toàn bộ lịch thi đấu. Tiếp tục?'))return;
+  state={names:updated,matches:schedule(updated)};
+  $('newPlayer').value='';save();render();
+ }catch(e){$('error').textContent=e.message}
+};
+$('newPlayer').addEventListener('keydown',e=>{if(e.key==='Enter'){$('addPlayer').click()}});
+$('clearMatches').onclick=()=>{
+ if(!state.matches.length)return;
+ if(!confirm(state.matches.some(m=>m.sa!==''||m.sb!=='')?'Xóa TẤT CẢ trận đã xếp và toàn bộ kết quả? Danh sách người chơi được giữ lại.':'Xóa toàn bộ trận đã xếp? Danh sách người chơi được giữ lại.'))return;
+ state.matches=[];save();render();
+};
 $('generate').onclick=()=>generate();
 $('reshuffle').onclick=()=>generate(true);
 $('reset').onclick=()=>{if(!confirm('Xóa danh sách, lịch và kết quả Round Robin xoay partner trên trình duyệt này?'))return;state={names:[],matches:[]};localStorage.removeItem(KEY);$('names').value='';$('error').textContent='';render()};
