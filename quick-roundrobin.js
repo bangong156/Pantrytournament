@@ -7,26 +7,58 @@ const save=()=>localStorage.setItem(KEY,JSON.stringify(state));
 function shuffle(items){const a=[...items];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function parseNames(text){
  const names=text.split(/\r?\n/).map(x=>x.replace(/^\s*(?:#\s*)?\d{1,4}\s*(?:[.)]|[-–—:]\s+|\t)\s*/,'').trim()).filter(Boolean);
- if(names.length<4||names.length%4!==0)throw Error('Chế độ xoay partner cần 4, 8, 12, 16… người (bội số của 4) để mọi người chơi đủ mỗi lượt.');
+ if(names.length<4)throw Error('Cần ít nhất 4 người để chơi đánh đôi.');
  if(names.length>64)throw Error('Tối đa 64 người.');
  if(new Set(names.map(x=>x.toLocaleLowerCase('vi'))).size!==names.length)throw Error('Tên VĐV bị trùng. Hãy thêm biệt danh để phân biệt.');
  return names;
 }
 function schedule(names){
- // Circle-method 1-factorization: each unordered partner pair occurs exactly once.
- const ids=shuffle(names.map((_,i)=>i)),n=ids.length;
- let ring=[...ids],matches=[];
- for(let round=0;round<n-1;round++){
-  const pairs=[];
-  for(let i=0;i<n/2;i++)pairs.push([ring[i],ring[n-1-i]]);
-  // Randomize pair-versus-pair arrangement without changing the partner uniqueness invariant.
-  const paired=shuffle(pairs);
-  for(let i=0;i<paired.length;i+=2){
-   matches.push({id:'m'+matches.length,round:round+1,a:paired[i],b:paired[i+1],sa:'',sb:''});
+ // Build every unique partnership, then pair disjoint partnerships into doubles matches.
+ // The theoretical ceiling is floor(n*(n-1)/4) matches: two unique partnerships per match.
+ const n=names.length,ids=shuffle(names.map((_,i)=>i));
+ const edges=[];for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)edges.push([ids[i],ids[j]]);
+ const ceiling=Math.floor(edges.length/2);
+ let best=[];
+ const trials=n>28?5:35;
+ for(let trial=0;trial<trials;trial++){
+  const pool=shuffle(edges),games=[],counts=Array(n).fill(0);
+  while(pool.length>1){
+   // Prefer players with fewer scheduled games while keeping partners unique.
+   let first=0;
+   if(trial%3!==0){
+    let score=Infinity;
+    for(let i=0;i<pool.length;i++){
+     const e=pool[i],v=counts[e[0]]+counts[e[1]]+Math.random()*.5;
+     if(v<score){score=v;first=i}
+    }
+   }
+   const a=pool.splice(first,1)[0];
+   let index=-1,score=Infinity;
+   for(let i=0;i<pool.length;i++){
+    const b=pool[i];
+    if(a[0]===b[0]||a[0]===b[1]||a[1]===b[0]||a[1]===b[1])continue;
+    const v=counts[b[0]]+counts[b[1]]+Math.random()*.5;
+    if(v<score){score=v;index=i}
+   }
+   if(index<0)continue;
+   const b=pool.splice(index,1)[0];
+   games.push({a,b});
+   for(const id of [...a,...b])counts[id]++;
   }
-  ring=[ring[0],ring[n-1],...ring.slice(1,n-1)];
+  if(games.length>best.length)best=games;
+  if(best.length===ceiling)break;
  }
- return matches;
+ // Pack matches into rounds; a player can appear at most once in each round.
+ const rounds=[];
+ for(const game of shuffle(best)){
+  let placed=false;
+  for(const round of rounds){
+   if(round.some(g=>[...g.a,...g.b].some(id=>game.a.includes(id)||game.b.includes(id))))continue;
+   round.push(game);placed=true;break;
+  }
+  if(!placed)rounds.push([game]);
+ }
+ return rounds.flatMap((round,i)=>round.map(game=>({id:'m'+(i)+'-'+game.a.join('-')+'-'+game.b.join('-'),round:i+1,a:game.a,b:game.b,sa:'',sb:''})));
 }
 function generate(reshuffle=false){
  $('error').textContent='';
@@ -45,14 +77,14 @@ function render(){
  $('teamsPanel').querySelector('h2').textContent='2. VĐV tham gia';
  $('teams').innerHTML=state.names.map((name,i)=>'<div class="team"><b>VĐV '+(i+1)+'</b>'+esc(name)+'</div>').join('');
  const done=state.matches.filter(m=>m.sa!==''&&m.sb!==''&&m.sa!==m.sb).length;
- $('progress').textContent=done+' / '+state.matches.length+' trận có kết quả · '+(state.names.length-1)+' lượt · Mỗi người '+(state.names.length-1)+' trận.';
- $('matches').innerHTML=Array.from({length:state.names.length-1},(_,i)=>i+1).map(r=>'<div class="round">LƯỢT '+r+'</div>'+state.matches.filter(m=>m.round===r).map(m=>'<div class="match"><div>'+m.a.map(id=>esc(state.names[id])).join(' + ')+'</div><input type="number" min="0" max="999" step="1" aria-label="Điểm đội A" data-match="'+m.id+'" data-side="sa" value="'+esc(m.sa)+'"><span class="vs">:</span><input type="number" min="0" max="999" step="1" aria-label="Điểm đội B" data-match="'+m.id+'" data-side="sb" value="'+esc(m.sb)+'"><div class="right">'+m.b.map(id=>esc(state.names[id])).join(' + ')+'</div></div>').join('')).join('');
+ $('progress').textContent=done+' / '+state.matches.length+' trận có kết quả · '+Math.max(...state.matches.map(m=>m.round))+' lượt · Ghép partner không trùng.';
+ $('matches').innerHTML=Array.from({length:Math.max(...state.matches.map(m=>m.round))},(_,i)=>i+1).map(r=>'<div class="round">LƯỢT '+r+'</div>'+state.matches.filter(m=>m.round===r).map(m=>'<div class="match"><div>'+m.a.map(id=>esc(state.names[id])).join(' + ')+'</div><input type="number" min="0" max="999" step="1" aria-label="Điểm đội A" data-match="'+m.id+'" data-side="sa" value="'+esc(m.sa)+'"><span class="vs">:</span><input type="number" min="0" max="999" step="1" aria-label="Điểm đội B" data-match="'+m.id+'" data-side="sb" value="'+esc(m.sb)+'"><div class="right">'+m.b.map(id=>esc(state.names[id])).join(' + ')+'</div></div>').join('')).join('');
  $('matches').querySelectorAll('input').forEach(input=>input.addEventListener('change',()=>{
   const match=state.matches.find(m=>m.id===input.dataset.match);if(!match)return;
   const value=input.value.trim();
   if(value!==''&&(!/^\d+$/.test(value)||Number(value)>999)){input.value=match[input.dataset.side];$('error').textContent='Điểm phải là số nguyên 0–999.';return}
   match[input.dataset.side]=value;$('error').textContent='';save();renderRanking();
-  $('progress').textContent=state.matches.filter(m=>m.sa!==''&&m.sb!==''&&m.sa!==m.sb).length+' / '+state.matches.length+' trận có kết quả · '+(state.names.length-1)+' lượt.';
+  $('progress').textContent=state.matches.filter(m=>m.sa!==''&&m.sb!==''&&m.sa!==m.sb).length+' / '+state.matches.length+' trận có kết quả · '+Math.max(...state.matches.map(m=>m.round))+' lượt.';
  }));
  renderRanking();
 }
