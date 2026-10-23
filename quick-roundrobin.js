@@ -218,3 +218,46 @@ $('generate').onclick=()=>generate();
 $('reshuffle').onclick=()=>generate(true);
 $('reset').onclick=()=>{if(!confirm('Xóa danh sách, lịch và kết quả Round Robin xoay partner trên trình duyệt này?'))return;state={names:[],matches:[]};save();$('names').value='';$('error').textContent='';render()};
 render();
+const LIBRARY_KEY='pantry-quick-rr-sessions-v1';
+const META_KEY='pantry-quick-rr-current-meta';
+let meta={title:'',date:''};
+try{meta={...meta,...JSON.parse(localStorage.getItem(META_KEY)||'{}')}}catch{}
+const localDate=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
+if(!meta.date)meta.date=localDate();
+function readLibrary(){try{const list=JSON.parse(localStorage.getItem(LIBRARY_KEY)||'[]');return Array.isArray(list)?list:[]}catch{return []}}
+function renderLibrary(){
+ $('sessionTitle').value=meta.title||'';
+ $('sessionDate').value=meta.date||localDate();
+ const list=readLibrary();
+ $('savedSessions').innerHTML=list.length?list.map((item,i)=>'<div class="team" style="margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="flex:1"><b>'+esc(item.title)+'</b><small>'+esc(item.date)+' · '+(item.state?.names?.length||0)+' VĐV'+(item.code?' · Phòng chung':' · Lưu trên máy')+'</small></span><button class="secondary" data-open-session="'+i+'">Mở</button><button class="danger" data-remove-session="'+i+'">Xóa</button></div>').join(''):'<p class="muted">Chưa có buổi Round Robin nào được lưu.</p>';
+ $('savedSessions').querySelectorAll('[data-open-session]').forEach(b=>b.onclick=async()=>{
+  const item=readLibrary()[Number(b.dataset.openSession)];if(!item)return;
+  if(state.matches.length&&!confirm('Mở buổi này sẽ thay thế phiên hiện tại. Tiếp tục?'))return;
+  try{
+   if(item.code){
+    const {data,error}=await db.rpc('quick_rr_read',{p_code:item.code});if(error||!data)throw Error(error?.message||'Không tìm thấy phòng');
+    roomCode=item.code;roomVersion=Number(data.version);blocked=false;state=data.state;localStorage.setItem(ROOM_KEY,roomCode);
+   }else{roomCode='';roomVersion=0;blocked=false;localStorage.removeItem(ROOM_KEY);state=item.state}
+   meta={title:item.title,date:item.date};localStorage.setItem(META_KEY,JSON.stringify(meta));localStorage.setItem(KEY,JSON.stringify(state));
+   showRoom();render();renderLibrary();$('saveStatus').textContent='Đã mở: '+item.title;
+  }catch(e){$('saveStatus').textContent='Không mở được: '+e.message}
+ });
+ $('savedSessions').querySelectorAll('[data-remove-session]').forEach(b=>b.onclick=()=>{
+  const i=Number(b.dataset.removeSession),list=readLibrary();
+  if(!confirm('Xóa buổi này khỏi danh sách đã lưu trên thiết bị?'))return;
+  list.splice(i,1);localStorage.setItem(LIBRARY_KEY,JSON.stringify(list));renderLibrary();
+ });
+}
+$('saveSession').onclick=async()=>{
+ const title=$('sessionTitle').value.trim(),date=$('sessionDate').value;
+ if(!title||!/^\d{4}-\d{2}-\d{2}$/.test(date)){$('saveStatus').textContent='Vui lòng đặt tên và chọn ngày hợp lệ.';return}
+ meta={title,date};localStorage.setItem(META_KEY,JSON.stringify(meta));
+ const list=readLibrary(),entry={title,date,code:roomCode||'',state:JSON.parse(JSON.stringify(state)),savedAt:Date.now()};
+ const index=list.findIndex(x=>x.title===title&&x.date===date);
+ if(index>=0)list[index]=entry;else list.unshift(entry);
+ try{localStorage.setItem(LIBRARY_KEY,JSON.stringify(list));$('saveStatus').textContent='Đã lưu buổi chơi '+title+' ('+date+')'+(roomCode?' · phòng chung đang đồng bộ trên Supabase.':' · trên thiết bị này.');renderLibrary()}
+ catch(e){$('saveStatus').textContent='Không lưu được: '+e.message}
+};
+$('sessionTitle').addEventListener('change',()=>{meta.title=$('sessionTitle').value.trim();localStorage.setItem(META_KEY,JSON.stringify(meta))});
+$('sessionDate').addEventListener('change',()=>{meta.date=$('sessionDate').value;localStorage.setItem(META_KEY,JSON.stringify(meta))});
+renderLibrary();
