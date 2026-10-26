@@ -54,3 +54,40 @@ header{height:76px;padding:0 max(32px,calc((100vw - 1480px)/2));display:flex;ali
 .roster-paste-actions{margin-top:12px}
 #pasteResult ol{max-height:250px;overflow:auto;padding-left:24px}
 #pasteResult li{margin:4px 0}
+
+/* Mobile navigation and dashboard overflow fixes */
+@media(max-width:700px){
+ html,body,#app{max-width:100%;overflow-x:clip}
+ #homepageGuide.wrap{
+  width:100%;max-width:100%;box-sizing:border-box;
+  padding:12px 14px!important;margin:0!important;
+  display:flex!important;flex-wrap:wrap!important;
+  align-items:center;justify-content:flex-start;gap:7px!important;
+  position:relative;z-index:2;background:#fff;
+ }
+ #homepageGuide>a,#homepageGuide>button{
+  margin:0!important;flex:0 0 auto;min-height:34px;
+  font-size:11px!important;padding:8px 10px!important;
+  line-height:1.2!important;
+ }
+ header.public-header,header.dashboard-header,header.public-home-header{
+  height:auto;min-height:64px;flex-wrap:wrap;gap:8px;
+  padding:10px 14px;
+ }
+ .public-header .homepage-guide-actions{
+  width:100%;display:flex;flex-wrap:wrap;gap:7px;
+  justify-content:flex-start!important;
+ }
+ .dashboard-header .pantry-header-brand,.dashboard-header .dashboard-header-brand,
+ .public-header .pantry-header-brand{min-width:0;flex-shrink:1}
+ .wrap,.workspace,.panel,.cards,.card,.discovery-grid,.discovery-card{
+  min-width:0;max-width:100%;box-sizing:border-box;
+ }
+ .panel .cards,.cards,.discovery-grid{
+  display:grid;grid-template-columns:minmax(0,1fr)!important;
+ }
+ .panel .card,.cards>.card,.discovery-card{width:100%;min-width:0}
+ .card h2,.card h3,.discovery-card h2,.discovery-card h3{
+  overflow-wrap:anywhere;
+ }
+}
