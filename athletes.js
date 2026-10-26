@@ -61,7 +61,7 @@ function setupPvnaLookup(prefix='',statusId='pvnaLookupStatus'){
    const players=result.players||[];
    if(players.length!==1){status.textContent=players.length?'Có nhiều hồ sơ trùng SĐT; vui lòng kiểm tra.':'Không tìm thấy hồ sơ PVNA khớp SĐT.';return}
    const player=players[0],score=player.doubleScore;
-   if(score!=null&&Number.isFinite(Number(score))){rating.value=String(score);status.textContent='✓ PVNA: '+player.name+' · Điểm đôi: '+score}
+   if(score!=null&&Number.isFinite(Number(score))){const rounded=Math.round((Number(score)+Number.EPSILON)*100)/100;rating.value=rounded.toFixed(2);status.textContent='✓ PVNA: '+player.name+' · Điểm đôi: '+rounded.toFixed(2)}
    else status.textContent='Tìm thấy '+player.name+' nhưng chưa có điểm PVNA.';
   }catch(e){if(id===sequence)status.textContent='Không tra cứu được: '+e.message}
  };
