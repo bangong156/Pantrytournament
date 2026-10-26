@@ -23,9 +23,9 @@ function renderAthletes(){
  $('athleteList').innerHTML=items.length?items.map(a=>'<div class="person"><img loading="lazy" src="'+esc(a.portrait)+'" alt="Ảnh '+esc(a.nickname)+'"><div><b>'+esc(a.name)+'</b> · '+esc(a.nickname)+'<small>PVNA: '+esc(a.pvna_rating??'Chưa có')+' · Tự chấm: '+esc(a.self_rating??'Chưa có')+'</small><small>Đã đăng ký '+(a.events?.length||0)+' nội dung</small></div></div>').join(''):'<p class="muted">Chưa có VĐV phù hợp.</p>';
 }
 $('search').oninput=renderAthletes;
-function updatePartner(){$('partnerSection').classList.toggle('hidden',!document.querySelector('input[name=event]:checked'))}
-$('partnerLater').onchange=()=>{const later=$('partnerLater').checked;$('partnerNow').classList.toggle('hidden',later);$('partnerSelect').required=!later&&!$('newPartnerToggle').checked};
-$('newPartnerToggle').onchange=()=>{$('newPartnerFields').classList.toggle('hidden',!$('newPartnerToggle').checked);$('partnerSelect').disabled=$('newPartnerToggle').checked};
+function updatePartner(){const selected=!!document.querySelector('input[name=event]:checked');$('partnerSection').classList.toggle('hidden',!selected);$('partnerSelect').required=selected&&!$('partnerLater').checked&&!$('newPartnerToggle').checked;$('partnerSelect').disabled=!selected||$('partnerLater').checked||$('newPartnerToggle').checked}
+$('partnerLater').onchange=()=>{const later=$('partnerLater').checked;$('partnerNow').classList.toggle('hidden',later);$('partnerSelect').required=!later&&!$('newPartnerToggle').checked;$('partnerSelect').disabled=later||$('newPartnerToggle').checked};
+$('newPartnerToggle').onchange=()=>{$('newPartnerFields').classList.toggle('hidden',!$('newPartnerToggle').checked);$('partnerSelect').disabled=$('newPartnerToggle').checked;$('partnerSelect').required=!$('partnerLater').checked&&!$('newPartnerToggle').checked};
 async function upload(file){
  if(!file||!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>3145728)throw Error('Ảnh phải là JPG, PNG hoặc WEBP và không quá 3MB.');
  const ext=file.type==='image/png'?'png':file.type==='image/webp'?'webp':'jpg';
@@ -61,7 +61,7 @@ function setupPvnaLookup(prefix='',statusId='pvnaLookupStatus'){
    const players=result.players||[];
    if(players.length!==1){status.textContent=players.length?'Có nhiều hồ sơ trùng SĐT; vui lòng kiểm tra.':'Không tìm thấy hồ sơ PVNA khớp SĐT.';return}
    const player=players[0],score=player.doubleScore;
-   if(score!=null&&Number.isFinite(Number(score))){const rounded=Math.round((Number(score)+Number.EPSILON)*100)/100;rating.value=rounded.toFixed(2);status.textContent='✓ PVNA: '+player.name+' · Điểm đôi: '+rounded.toFixed(2)}
+   if(score!=null&&Number.isFinite(Number(score))){const truncated=(Math.trunc(Number(score)*100)/100).toFixed(2);rating.value=truncated;status.textContent='✓ PVNA: '+player.name+' · Điểm đôi: '+truncated}
    else status.textContent='Tìm thấy '+player.name+' nhưng chưa có điểm PVNA.';
   }catch(e){if(id===sequence)status.textContent='Không tra cứu được: '+e.message}
  };
@@ -88,5 +88,5 @@ $('registerForm').onsubmit=async ev=>{
  }catch(e){$('message').style.color='#ad382e';$('message').textContent='Đăng ký thất bại: '+e.message}
  finally{button.disabled=false;button.textContent='Gửi đăng ký'}
 };
-if(location.hash==='#register')tab('register');else tab('list');
+if(location.hash==='#register')tab('register');else tab('list');updatePartner();
 load();
