@@ -33,6 +33,14 @@ async function upload(file){
  if(error)throw error;
  return db.storage.from('pantry-athlete-portraits').getPublicUrl(path).data.publicUrl;
 }
+function bindRating(prefix=''){
+ const form=$('registerForm'),name=k=>form.elements.namedItem(prefix+k);
+ const select=name('other_system'),rating=name('other_rating'),noPvna=name('no_pvna'),phone=name('pvna_phone'),pvna=name('pvna_rating');
+ const updateSystem=()=>{const absent=select.value==='Không có';rating.disabled=absent;rating.required=!absent;if(absent)rating.value='';rating.placeholder=absent?'Không áp dụng':'Nhập điểm *'};
+ const updatePvna=()=>{const absent=noPvna.checked;phone.disabled=absent;phone.required=!absent;pvna.disabled=absent;if(absent){phone.value='';pvna.value=''}};
+ select.addEventListener('change',updateSystem);noPvna.addEventListener('change',updatePvna);updateSystem();updatePvna();
+}
+bindRating();bindRating('partner_');
 const fields=(form,prefix='')=>Object.fromEntries(['full_name','nickname','pvna_phone','pvna_rating','other_system','other_rating','self_rating'].map(k=>[k,form.elements.namedItem(prefix+k)?.value?.trim()||'']));
 $('registerForm').onsubmit=async ev=>{
  ev.preventDefault();const form=ev.currentTarget,button=$('submitRegistration');$('message').textContent='';
@@ -42,12 +50,12 @@ $('registerForm').onsubmit=async ev=>{
  if(!fresh&&!existing){$('message').textContent='Vui lòng chọn partner hoặc đăng ký giúp partner.';return}
  button.disabled=true;button.textContent='Đang gửi…';
  try{
-  const profile=fields(form);profile.portrait_url=await upload(form.elements.namedItem('portrait').files[0]);
+  const profile=fields(form);if(form.elements.namedItem('no_pvna').checked)profile.pvna_phone='Chưa có PVNA';profile.portrait_url=await upload(form.elements.namedItem('portrait').files[0]);
   let partner=fresh?fields(form,'partner_'):{existing_id:existing};
-  if(fresh){if(!partner.full_name||!partner.nickname||partner.pvna_phone.length<8)throw Error('Điền đủ thông tin partner.');partner.portrait_url=await upload(form.elements.namedItem('partner_portrait').files[0])}
+  if(fresh){if(form.elements.namedItem('partner_no_pvna').checked)partner.pvna_phone='Chưa có PVNA';if(!partner.other_system||partner.other_system!=='Không có'&&!partner.other_rating)throw Error('Vui lòng chọn hệ thống điểm và nhập điểm partner (hoặc chọn Không có).');if(!partner.full_name||!partner.nickname||partner.pvna_phone.length<8)throw Error('Điền đủ thông tin partner.');partner.portrait_url=await upload(form.elements.namedItem('partner_portrait').files[0])}
   const {error}=await db.rpc('pantry_register_athlete',{p_profile:profile,p_entries:checked,p_partner:partner});
   if(error)throw error;
-  form.reset();$('partnerSection').classList.add('hidden');$('newPartnerFields').classList.add('hidden');$('message').style.color='#2c7335';$('message').textContent='Đăng ký thành công!';await load();
+  form.reset();for(const p of ['','partner_']){const sys=form.elements.namedItem(p+'other_system'),score=form.elements.namedItem(p+'other_rating'),phone=form.elements.namedItem(p+'pvna_phone'),pvna=form.elements.namedItem(p+'pvna_rating');score.disabled=false;score.required=!p;phone.disabled=false;phone.required=!p;pvna.disabled=false;sys.value='';} $('partnerSection').classList.add('hidden');$('newPartnerFields').classList.add('hidden');$('message').style.color='#2c7335';$('message').textContent='Đăng ký thành công!';await load();
  }catch(e){$('message').style.color='#ad382e';$('message').textContent='Đăng ký thất bại: '+e.message}
  finally{button.disabled=false;button.textContent='Gửi đăng ký'}
 };
