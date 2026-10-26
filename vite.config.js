@@ -7,6 +7,7 @@ export default defineConfig({
       input: {
         main: resolve(import.meta.dirname, 'index.html'),
         roundrobin: resolve(import.meta.dirname, 'roundrobin.html'),
+        athletes: resolve(import.meta.dirname, 'athletes.html'),
       },
     },
   },
