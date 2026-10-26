@@ -91,3 +91,30 @@ header{height:76px;padding:0 max(32px,calc((100vw - 1480px)/2));display:flex;ali
   overflow-wrap:anywhere;
  }
 }
+
+/* Poster-led tournament discovery */
+.discovery-home{max-width:1240px}
+.discovery-home .public-hero{padding:42px 0 30px}
+.discovery-home .public-hero h1{font-size:clamp(36px,4.5vw,60px);line-height:1.04}
+.discovery-browse{padding:20px 0 50px}
+.discovery-browse .discovery-grid,.discovery-live-section .discovery-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;align-items:stretch}
+.discovery-grid .discovery-card{padding:0;display:flex;flex-direction:column;min-width:0;overflow:hidden;border-radius:18px;background:#fff;box-shadow:0 12px 34px rgba(31,43,25,.08)}
+.discovery-grid .discovery-card:before{display:none}
+.discovery-poster{position:relative;aspect-ratio:4/3;overflow:hidden;background:#263521}
+.discovery-poster-image{display:block;width:100%;height:100%;object-fit:cover;object-position:center;transition:transform .3s ease}
+.discovery-card:hover .discovery-poster-image{transform:scale(1.045)}
+.discovery-poster-status{position:absolute;top:12px;right:12px;background:rgba(255,255,255,.95);color:#293a26;border-radius:99px;padding:7px 10px;font-size:10px;font-weight:900;box-shadow:0 3px 12px rgba(0,0,0,.13)}
+.discovery-poster-status.live-status{color:#b6342e}
+.discovery-poster-placeholder{height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:12px;padding:22px;background:radial-gradient(circle at 80% 20%,#596e3d,#283822 70%);color:#fff}
+.discovery-poster-placeholder span{font-size:11px;letter-spacing:.2em;font-weight:900;color:#cbd5bc}
+.discovery-poster-placeholder strong{font-size:clamp(20px,2.5vw,29px);line-height:1.12}
+.discovery-poster-placeholder small{font-size:10px;letter-spacing:.14em;color:#cbd5bc}
+.discovery-card-body{display:flex;flex:1;flex-direction:column;gap:8px;padding:19px 19px 20px}
+.discovery-card-body .discovery-card-top{display:flex;align-items:center}
+.discovery-card-body h3{margin:3px 0 0;font-size:clamp(19px,1.7vw,24px);line-height:1.18}
+.discovery-card-body .discovery-date{margin:0 0 10px;font-size:13px}
+.discovery-card-body .discovery-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:auto}
+.discovery-card-body .discovery-actions button{flex:1 1 130px;white-space:nowrap}
+.discovery-browse .discovery-tabs{margin-bottom:8px}
+@media(max-width:1050px){.discovery-browse .discovery-grid,.discovery-live-section .discovery-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}}
+@media(max-width:700px){.discovery-home .public-hero{padding:25px 0 18px}.discovery-browse .discovery-grid,.discovery-live-section .discovery-grid{grid-template-columns:minmax(0,1fr)!important;gap:17px}.discovery-poster{aspect-ratio:16/11}.discovery-card-body{padding:16px}.discovery-card-body h3{font-size:21px}}
