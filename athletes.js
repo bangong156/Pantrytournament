@@ -23,9 +23,37 @@ function renderAthletes(){
  $('athleteList').innerHTML=items.length?items.map(a=>'<div class="person"><img loading="lazy" src="'+esc(a.portrait)+'" alt="Ảnh '+esc(a.nickname)+'"><div><b>'+esc(a.name)+'</b> · '+esc(a.nickname)+'<small>PVNA: '+esc(a.pvna_rating??'Chưa có')+' · Tự chấm: '+esc(a.self_rating??'Chưa có')+'</small><small>Đã đăng ký '+(a.events?.length||0)+' nội dung</small></div></div>').join(''):'<p class="muted">Chưa có VĐV phù hợp.</p>';
 }
 $('search').oninput=renderAthletes;
-function updatePartner(){const selected=!!document.querySelector('input[name=event]:checked');$('partnerSection').classList.toggle('hidden',!selected);$('partnerSelect').required=selected&&!$('partnerLater').checked&&!$('newPartnerToggle').checked;$('partnerSelect').disabled=!selected||$('partnerLater').checked||$('newPartnerToggle').checked}
-$('partnerLater').onchange=()=>{const later=$('partnerLater').checked;$('partnerNow').classList.toggle('hidden',later);$('partnerSelect').required=!later&&!$('newPartnerToggle').checked;$('partnerSelect').disabled=later||$('newPartnerToggle').checked};
-$('newPartnerToggle').onchange=()=>{$('newPartnerFields').classList.toggle('hidden',!$('newPartnerToggle').checked);$('partnerSelect').disabled=$('newPartnerToggle').checked;$('partnerSelect').required=!$('partnerLater').checked&&!$('newPartnerToggle').checked};
+function updatePartner(){
+ const selected=!!document.querySelector('input[name=event]:checked');
+ const later=$('partnerLater').checked;
+ const fresh=selected&&!later&&$('newPartnerToggle').checked;
+ $('partnerSection').classList.toggle('hidden',!selected);
+ $('partnerNow').classList.toggle('hidden',later);
+ $('newPartnerFields').classList.toggle('hidden',!fresh);
+ const picker=$('partnerSelect');
+ picker.disabled=!selected||later||fresh;
+ picker.required=selected&&!later&&!fresh;
+ document.querySelectorAll('#newPartnerFields input,#newPartnerFields select').forEach(input=>{
+  input.disabled=!fresh;
+  if(fresh){
+   const name=input.name;
+   input.required=['partner_full_name','partner_nickname','partner_portrait','partner_other_system'].includes(name)
+    ||name==='partner_other_rating'&&$('registerForm').elements.namedItem('partner_other_system').value!=='Không có'
+    ||name==='partner_pvna_phone'&&!$('registerForm').elements.namedItem('partner_no_pvna').checked;
+  }else input.required=false;
+ });
+ if(fresh){
+  const form=$('registerForm');
+  const absent=form.elements.namedItem('partner_no_pvna').checked;
+  form.elements.namedItem('partner_pvna_phone').disabled=absent;
+  form.elements.namedItem('partner_pvna_rating').disabled=absent;
+  const noSystem=form.elements.namedItem('partner_other_system').value==='Không có';
+  form.elements.namedItem('partner_other_rating').disabled=noSystem;
+  form.elements.namedItem('partner_other_rating').required=!noSystem;
+ }
+}
+$('partnerLater').onchange=updatePartner;
+$('newPartnerToggle').onchange=updatePartner;
 async function upload(file){
  if(!file||!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>3145728)throw Error('Ảnh phải là JPG, PNG hoặc WEBP và không quá 3MB.');
  const ext=file.type==='image/png'?'png':file.type==='image/webp'?'webp':'jpg';
@@ -39,7 +67,7 @@ function bindRating(prefix=''){
  const select=name('other_system'),rating=name('other_rating'),noPvna=name('no_pvna'),phone=name('pvna_phone'),pvna=name('pvna_rating');
  const updateSystem=()=>{const absent=select.value==='Không có';rating.disabled=absent;rating.required=!absent;if(absent)rating.value='';rating.placeholder=absent?'Không áp dụng':'Nhập điểm *'};
  const updatePvna=()=>{const absent=noPvna.checked;phone.disabled=absent;phone.required=!absent;pvna.disabled=absent;if(absent){phone.value='';pvna.value=''}};
- select.addEventListener('change',updateSystem);noPvna.addEventListener('change',updatePvna);updateSystem();updatePvna();
+ select.addEventListener('change',()=>{updateSystem();if(prefix)updatePartner()});noPvna.addEventListener('change',()=>{updatePvna();if(prefix)updatePartner()});updateSystem();updatePvna();
 }
 bindRating();bindRating('partner_');
 const PVNA_ENDPOINT='https://duuklzzxpegptsarcbqq.supabase.co/functions/v1/pvna-phone-search';
@@ -84,7 +112,7 @@ $('registerForm').onsubmit=async ev=>{
   if(checked.length&&fresh){if(form.elements.namedItem('partner_no_pvna').checked)partner.pvna_phone='Chưa có PVNA';if(!partner.other_system||partner.other_system!=='Không có'&&!partner.other_rating)throw Error('Vui lòng chọn hệ thống điểm và nhập điểm partner (hoặc chọn Không có).');if(!partner.full_name||!partner.nickname||partner.pvna_phone.length<8)throw Error('Điền đủ thông tin partner.');partner.portrait_url=await upload(form.elements.namedItem('partner_portrait').files[0])}
   const {error}=await db.rpc('pantry_register_athlete',{p_profile:profile,p_entries:checked,p_partner:partner});
   if(error)throw error;
-  form.reset();$('partnerNow').classList.remove('hidden');for(const p of ['','partner_']){const sys=form.elements.namedItem(p+'other_system'),score=form.elements.namedItem(p+'other_rating'),phone=form.elements.namedItem(p+'pvna_phone'),pvna=form.elements.namedItem(p+'pvna_rating');score.disabled=false;score.required=!p;phone.disabled=false;phone.required=!p;pvna.disabled=false;sys.value='';} $('partnerSection').classList.add('hidden');$('newPartnerFields').classList.add('hidden');$('message').style.color='#2c7335';$('message').textContent=checked.length?'Đăng ký hồ sơ và giải thành công!':'Đăng ký hồ sơ VĐV thành công!';await load();
+  form.reset();$('partnerNow').classList.remove('hidden');for(const p of ['','partner_']){const sys=form.elements.namedItem(p+'other_system'),score=form.elements.namedItem(p+'other_rating'),phone=form.elements.namedItem(p+'pvna_phone'),pvna=form.elements.namedItem(p+'pvna_rating');score.disabled=false;score.required=!p;phone.disabled=false;phone.required=!p;pvna.disabled=false;sys.value='';} updatePartner();$('message').style.color='#2c7335';$('message').textContent=checked.length?'Đăng ký hồ sơ và giải thành công!':'Đăng ký hồ sơ VĐV thành công!';await load();
  }catch(e){$('message').style.color='#ad382e';$('message').textContent='Đăng ký thất bại: '+e.message}
  finally{button.disabled=false;button.textContent='Gửi đăng ký'}
 };
