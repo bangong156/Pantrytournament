@@ -3,7 +3,7 @@ const db=createClient('https://duuklzzxpegptsarcbqq.supabase.co','sb_publishable
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
 let athletes=[],events=[];
-function tab(type){$('listSection').classList.toggle('hidden',type!=='list');$('registerSection').classList.toggle('hidden',type!=='register');$('tabList').className=type==='list'?'':'secondary';$('tabRegister').className=type==='register'?'':'secondary'}
+function tab(type){$('adminAthleteSection').classList.add('hidden');$('listSection').classList.toggle('hidden',type!=='list');$('registerSection').classList.toggle('hidden',type!=='register');$('tabList').className=type==='list'?'':'secondary';$('tabRegister').className=type==='register'?'':'secondary'}
 $('tabList').onclick=()=>tab('list');$('tabRegister').onclick=()=>tab('register');
 async function load(){
  const [a,e]=await Promise.all([db.rpc('pantry_athlete_public_list'),db.rpc('pantry_open_registrations')]);
@@ -115,6 +115,55 @@ $('registerForm').onsubmit=async ev=>{
   form.reset();$('partnerNow').classList.remove('hidden');for(const p of ['','partner_']){const sys=form.elements.namedItem(p+'other_system'),score=form.elements.namedItem(p+'other_rating'),phone=form.elements.namedItem(p+'pvna_phone'),pvna=form.elements.namedItem(p+'pvna_rating');score.disabled=false;score.required=!p;phone.disabled=false;phone.required=!p;pvna.disabled=false;sys.value='';} updatePartner();$('message').style.color='#2c7335';$('message').textContent=checked.length?'Đăng ký hồ sơ và giải thành công!':'Đăng ký hồ sơ VĐV thành công!';await load();
  }catch(e){$('message').style.color='#ad382e';$('message').textContent='Đăng ký thất bại: '+e.message}
  finally{button.disabled=false;button.textContent='Gửi đăng ký'}
+};
+
+let adminAthletes=[];
+const adminMessage=text=>{$('adminAthleteMessage').textContent=text};
+async function loadAdminAthletes(){
+ const {data,error}=await db.rpc('pantry_admin_athletes');
+ if(error){adminMessage('Không tải được hồ sơ: '+error.message);return}
+ adminAthletes=data||[];$('adminAthleteWorkspace').classList.remove('hidden');$('adminAthleteLogin').classList.add('hidden');renderAdminAthletes();
+}
+function renderAdminAthletes(){
+ const q=$('adminAthleteSearch').value.trim().toLocaleLowerCase('vi');
+ const items=adminAthletes.filter(a=>(a.full_name+' '+a.nickname).toLocaleLowerCase('vi').includes(q));
+ const list=$('adminAthleteList');list.replaceChildren();
+ for(const a of items){
+  const row=document.createElement('div');row.className='person';
+  const label=document.createElement('span');label.textContent=a.full_name+' · '+a.nickname+' · PVNA: '+(a.pvna_rating??'Chưa có');
+  const btn=document.createElement('button');btn.type='button';btn.textContent='Sửa';btn.onclick=()=>openAdminAthlete(a.id);
+  row.append(label,btn);list.append(row);
+ }
+}
+function openAdminAthlete(id){
+ const a=adminAthletes.find(x=>x.id===id);if(!a)return;
+ const form=$('adminAthleteEdit');
+ for(const key of ['id','full_name','nickname','pvna_phone','pvna_rating','other_system','other_rating','self_rating'])form.elements.namedItem(key).value=a[key]??'';
+ form.elements.namedItem('portrait').value='';
+ form.classList.remove('hidden');form.scrollIntoView({behavior:'smooth',block:'nearest'});adminMessage('');
+}
+$('adminAthleteToggle').onclick=async()=>{
+ const section=$('adminAthleteSection');section.classList.toggle('hidden');$('listSection').classList.add('hidden');$('registerSection').classList.add('hidden');
+ if(section.classList.contains('hidden')){tab('list');return}
+ const {data}=await db.auth.getUser();if(data?.user)await loadAdminAthletes();
+};
+$('adminAthleteSignIn').onclick=async()=>{
+ adminMessage('Đang xác thực…');
+ const {error}=await db.auth.signInWithPassword({email:$('adminAthleteEmail').value.trim(),password:$('adminAthletePassword').value});
+ if(error){adminMessage('Đăng nhập thất bại: '+error.message);return}
+ $('adminAthletePassword').value='';await loadAdminAthletes();
+};
+$('adminAthleteSearch').oninput=renderAdminAthletes;
+$('adminAthleteCancel').onclick=()=>{$('adminAthleteEdit').classList.add('hidden');adminMessage('')};
+$('adminAthleteEdit').onsubmit=async e=>{
+ e.preventDefault();const form=e.currentTarget,button=form.querySelector('button[type=submit]');button.disabled=true;adminMessage('Đang lưu…');
+ try{
+  const payload={};for(const key of ['full_name','nickname','pvna_phone','pvna_rating','other_system','other_rating','self_rating'])payload[key]=form.elements.namedItem(key).value.trim();
+  const photo=form.elements.namedItem('portrait').files[0];if(photo)payload.portrait_url=await upload(photo);
+  const {error}=await db.rpc('pantry_admin_update_athlete',{p_id:form.elements.namedItem('id').value,p_data:payload});if(error)throw error;
+  adminMessage('Đã lưu chỉnh sửa thành công.');form.classList.add('hidden');await loadAdminAthletes();await load();
+ }catch(err){adminMessage('Không lưu được: '+err.message)}
+ finally{button.disabled=false}
 };
 if(location.hash==='#register')tab('register');else tab('list');updatePartner();
 load();
