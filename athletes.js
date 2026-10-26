@@ -3,7 +3,7 @@ const db=createClient('https://duuklzzxpegptsarcbqq.supabase.co','sb_publishable
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
 let athletes=[],events=[];
-function tab(type){$('adminAthleteSection').classList.add('hidden');$('listSection').classList.toggle('hidden',type!=='list');$('registerSection').classList.toggle('hidden',type!=='register');$('tabList').className=type==='list'?'':'secondary';$('tabRegister').className=type==='register'?'':'secondary'}
+function tab(type){$('profileSection').classList.add('hidden');$('adminAthleteSection').classList.add('hidden');$('listSection').classList.toggle('hidden',type!=='list');$('registerSection').classList.toggle('hidden',type!=='register');$('tabList').className=type==='list'?'':'secondary';$('tabRegister').className=type==='register'?'':'secondary'}
 $('tabList').onclick=()=>tab('list');$('tabRegister').onclick=()=>tab('register');
 async function load(){
  const [a,e]=await Promise.all([db.rpc('pantry_athlete_public_list'),db.rpc('pantry_open_registrations')]);
@@ -20,9 +20,24 @@ async function load(){
 function renderAthletes(){
  const q=$('search').value.toLocaleLowerCase('vi').trim();
  const items=athletes.filter(a=>(a.name+' '+a.nickname).toLocaleLowerCase('vi').includes(q));
- $('athleteList').innerHTML=items.length?items.map(a=>'<div class="person"><img loading="lazy" src="'+esc(a.portrait)+'" alt="Ảnh '+esc(a.nickname)+'"><div><b>'+esc(a.name)+'</b> · '+esc(a.nickname)+'<small>PVNA: '+esc(a.pvna_rating??'Chưa có')+' · Tự chấm: '+esc(a.self_rating??'Chưa có')+'</small><small>Đã đăng ký '+(a.events?.length||0)+' nội dung</small></div></div>').join(''):'<p class="muted">Chưa có VĐV phù hợp.</p>';
+ $('athleteList').innerHTML=items.length?items.map(a=>'<div class="person" role="button" tabindex="0" data-athlete-id="'+esc(a.id)+'" aria-label="Xem hồ sơ '+esc(a.name)+'"><img loading="lazy" src="'+esc(a.portrait)+'" alt="Ảnh '+esc(a.nickname)+'"><div><b>'+esc(a.name)+'</b> · '+esc(a.nickname)+'<small>PVNA: '+esc(a.pvna_rating??'Chưa có')+' · Tự chấm: '+esc(a.self_rating??'Chưa có')+'</small><small>Đã đăng ký '+(a.events?.length||0)+' nội dung</small></div></div>').join(''):'<p class="muted">Chưa có VĐV phù hợp.</p>';
 }
 $('search').oninput=renderAthletes;
+$('athleteList').addEventListener('click',e=>{const row=e.target.closest('[data-athlete-id]');if(row)void showAthleteProfile(row.dataset.athleteId)});
+$('athleteList').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){const row=e.target.closest('[data-athlete-id]');if(row){e.preventDefault();void showAthleteProfile(row.dataset.athleteId)}}});
+$('profileBack').onclick=()=>{location.hash='list';tab('list')};
+async function showAthleteProfile(id){
+ $('profileSection').classList.remove('hidden');$('listSection').classList.add('hidden');$('registerSection').classList.add('hidden');$('adminAthleteSection').classList.add('hidden');
+ $('profileContent').textContent='Đang tải hồ sơ…';
+ const {data:p,error}=await db.rpc('pantry_athlete_public_profile',{p_athlete_id:id});
+ if(error||!p){$('profileContent').textContent='Không tải được hồ sơ VĐV: '+(error?.message||'Không tìm thấy');return}
+ const events=p.events||[],scores=[['PVNA',p.pvna_rating],[(p.other_system&&p.other_system!=='Không có')?p.other_system:'Hệ thống khác',p.other_rating],['Tự chấm',p.self_rating]];
+ const eventHtml=events.length?'<ul class="profile-events">'+events.map(ev=>'<li><b>'+esc(ev.tournament)+'</b> · '+esc(ev.event||'Nội dung chính')+'<small>'+esc(ev.date||'')+' · '+esc(ev.status||'')+(ev.partner?' · Partner: '+esc(ev.partner):'')+'</small></li>').join('')+'</ul>':'<p class="muted">Chưa đăng ký giải nào tại hệ thống.</p>';
+ $('profileContent').innerHTML='<div class="profile-hero"><img class="profile-portrait" src="'+esc(p.portrait)+'" alt="Ảnh VĐV '+esc(p.name)+'"><div><h2>'+esc(p.name)+'</h2><p><b>Nickname:</b> '+esc(p.nickname)+'</p><p><b>Giới tính:</b> '+esc(p.gender||'Chưa cập nhật')+'</p><p><b>SĐT:</b> Được bảo mật</p></div></div><h3>Điểm trình</h3><div class="profile-details">'+scores.map(([name,score])=>'<div class="profile-stat"><small>'+esc(name)+'</small><strong>'+esc(score??'Chưa có')+'</strong></div>').join('')+'</div><h3>Giải đã tham gia / đăng ký</h3>'+eventHtml+'<h3>Thành tích</h3><p class="muted">Chưa có thành tích thi đấu được xác nhận và liên kết với hồ sơ này.</p>';
+ location.hash='profile/'+encodeURIComponent(id);
+ $('profileSection').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
 function updatePartner(){
  const selected=!!document.querySelector('input[name=event]:checked');
  const later=$('partnerLater').checked;
@@ -165,5 +180,5 @@ $('adminAthleteEdit').onsubmit=async e=>{
  }catch(err){adminMessage('Không lưu được: '+err.message)}
  finally{button.disabled=false}
 };
-if(location.hash==='#register')tab('register');else tab('list');updatePartner();
+if(location.hash==='#register')tab('register');else tab('list');updatePartner();if(location.hash.startsWith('#profile/'))void showAthleteProfile(decodeURIComponent(location.hash.slice(9)));
 load();
