@@ -101,7 +101,9 @@ const eventType=t=>t.event_type==='minigame'?'MINIGAME':'GIẢI ĐẤU';
 const eventFormat=t=>t.format==='mlp'?'Đồng đội / MLP':'Đánh đôi';
 function discoveryCard(t,live=false,progress=''){
  const id=esc(t.id),status=live?'🟢 ĐANG DIỄN RA':eventCategory(t.start_date,vietnamToday())==='upcoming'?'📅 SẮP DIỄN RA':'🏆 ĐÃ KẾT THÚC';
- return `<article class="discovery-card ${live?'discovery-live':''}" data-enter-tournament="${id}" tabindex="0" role="link" aria-label="Vào giải ${esc(t.name)}"><div class="discovery-card-top"><span class="pill">${eventType(t)} · ${eventFormat(t)}</span><span class="discovery-status ${live?'live-status':''}">${status}</span></div><h3>${esc(t.name)}</h3><p>${esc(displayEventDate(t.start_date))}${t.start_time?' • '+esc(t.start_time.slice(0,5)):''}</p>${progress}<div class="discovery-actions">${live?`<button data-hub="${id}">XEM GIẢI →</button><button class="secondary" data-info="${id}">Thông tin giải</button>`:`<button class="secondary" data-info="${id}">Thông tin giải</button><button data-hub="${id}">Chi tiết giải →</button>`}</div></article>`;
+ const poster=posterUrl(t.id,t.poster_path);
+ const visual=poster?`<img class="discovery-poster-image" src="${esc(poster)}" alt="Poster giải ${esc(t.name)}" loading="lazy" decoding="async">`:`<div class="discovery-poster-placeholder"><span>THE PANTRY</span><strong>${esc(t.name)}</strong><small>PICKLEBALL TOURNAMENT</small></div>`;
+ return `<article class="discovery-card ${live?'discovery-live':''}" data-enter-tournament="${id}" tabindex="0" role="link" aria-label="Vào giải ${esc(t.name)}"><div class="discovery-poster">${visual}<span class="discovery-poster-status ${live?'live-status':''}">${status}</span></div><div class="discovery-card-body"><div class="discovery-card-top"><span class="pill">${eventType(t)} · ${eventFormat(t)}</span></div><h3>${esc(t.name)}</h3><p class="discovery-date">📆 ${esc(displayEventDate(t.start_date))}${t.start_time?' · '+esc(t.start_time.slice(0,5)):''}</p>${progress}<div class="discovery-actions">${live?`<button data-hub="${id}">XEM GIẢI →</button><button class="secondary" data-info="${id}">Thông tin giải</button>`:`<button class="secondary" data-info="${id}">Thông tin giải</button><button data-hub="${id}">Chi tiết giải →</button>`}</div></div></article>`;
 }
 async function publicDashboard(selectedCategory=null){
  if(typeof history!=='undefined')history.replaceState(null,'',location.pathname);
@@ -109,6 +111,11 @@ async function publicDashboard(selectedCategory=null){
  const {data:t,error}=await supabase.from('tournaments').select('id,name,event_type,format,start_date,start_time').order('start_date');
  if(epoch!==renderEpoch)return;
  if(error){app.innerHTML=`<main class="wrap"><p>${esc(error.message)}</p><button id="retryDiscovery">Thử lại</button></main>`;document.querySelector('#retryDiscovery').onclick=()=>publicDashboard();return}
+ const {data:posters,error:posterError}=await supabase.from('tournament_info').select('tournament_id,poster_path').in('tournament_id',(t||[]).map(x=>x.id).length?(t||[]).map(x=>x.id):['00000000-0000-0000-0000-000000000000']);
+ if(epoch!==renderEpoch)return;
+ if(posterError)console.warn('Tournament posters unavailable:',posterError.message);
+ const posterMap=new Map((posters||[]).map(x=>[x.tournament_id,x.poster_path]));
+ (t||[]).forEach(x=>{x.poster_path=posterMap.get(x.id)||null});
  const today=vietnamToday(),all=t||[],live=all.filter(x=>eventCategory(x.start_date,today)==='live').sort((a,b)=>a.name.localeCompare(b.name,'vi')||a.id.localeCompare(b.id)),upcoming=all.filter(x=>eventCategory(x.start_date,today)==='upcoming').sort((a,b)=>eventDate(a.start_date).localeCompare(eventDate(b.start_date))||a.name.localeCompare(b.name,'vi')),completed=all.filter(x=>eventCategory(x.start_date,today)==='completed').sort((a,b)=>eventDate(b.start_date).localeCompare(eventDate(a.start_date))||a.name.localeCompare(b.name,'vi'));
  const category=selectedCategory==='completed'||selectedCategory==='upcoming'?selectedCategory:upcoming.length?'upcoming':'completed';
  const counts=Object.fromEntries(await Promise.all(live.map(async tournament=>{
