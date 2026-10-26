@@ -47,12 +47,12 @@ const PVNA_KEY='sb_publishable_FmGKX67AD3M4QvCuL3dSyg_w0X5vIX9';
 function setupPvnaLookup(prefix='',statusId='pvnaLookupStatus'){
  const form=$('registerForm'),phone=form.elements.namedItem(prefix+'pvna_phone'),rating=form.elements.namedItem(prefix+'pvna_rating'),noPvna=form.elements.namedItem(prefix+'no_pvna'),status=$(statusId);
  let timer,sequence=0;
- const normalized=v=>{let n=String(v||'').replace(/[\\s().-]/g,'');if(n.startsWith('+84'))n='0'+n.slice(3);else if(n.startsWith('84')&&n.length===11)n='0'+n.slice(2);return n};
+ const normalized=v=>{let n=String(v||'').replace(/[\s().-]/g,'');if(n.startsWith('+84'))n='0'+n.slice(3);else if(n.startsWith('84')&&n.length===11)n='0'+n.slice(2);return n};
  const run=async()=>{
   const id=++sequence,num=normalized(phone.value);
   rating.value='';
   if(noPvna.checked){status.textContent='Đã chọn Chưa có PVNA.';return}
-  if(!/^0[35789]\\d{8}$/.test(num)){status.textContent='Nhập đủ 10 số để tra cứu PVNA.';return}
+  if(!/^0[35789]\d{8}$/.test(num)){status.textContent='Nhập đủ 10 số để tra cứu PVNA.';return}
   status.textContent='Đang tra cứu PVNA…';
   try{
    const response=await fetch(PVNA_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','apikey':PVNA_KEY},body:JSON.stringify({phone:num})});
