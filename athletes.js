@@ -42,6 +42,34 @@ function bindRating(prefix=''){
  select.addEventListener('change',updateSystem);noPvna.addEventListener('change',updatePvna);updateSystem();updatePvna();
 }
 bindRating();bindRating('partner_');
+const PVNA_ENDPOINT='https://duuklzzxpegptsarcbqq.supabase.co/functions/v1/pvna-phone-search';
+const PVNA_KEY='sb_publishable_FmGKX67AD3M4QvCuL3dSyg_w0X5vIX9';
+function setupPvnaLookup(prefix='',statusId='pvnaLookupStatus'){
+ const form=$('registerForm'),phone=form.elements.namedItem(prefix+'pvna_phone'),rating=form.elements.namedItem(prefix+'pvna_rating'),noPvna=form.elements.namedItem(prefix+'no_pvna'),status=$(statusId);
+ let timer,sequence=0;
+ const normalized=v=>{let n=String(v||'').replace(/[\\s().-]/g,'');if(n.startsWith('+84'))n='0'+n.slice(3);else if(n.startsWith('84')&&n.length===11)n='0'+n.slice(2);return n};
+ const run=async()=>{
+  const id=++sequence,num=normalized(phone.value);
+  rating.value='';
+  if(noPvna.checked){status.textContent='Đã chọn Chưa có PVNA.';return}
+  if(!/^0[35789]\\d{8}$/.test(num)){status.textContent='Nhập đủ 10 số để tra cứu PVNA.';return}
+  status.textContent='Đang tra cứu PVNA…';
+  try{
+   const response=await fetch(PVNA_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','apikey':PVNA_KEY},body:JSON.stringify({phone:num})});
+   const result=await response.json();if(id!==sequence)return;
+   if(!response.ok)throw Error(result.error||'Không kết nối được PVNA');
+   const players=result.players||[];
+   if(players.length!==1){status.textContent=players.length?'Có nhiều hồ sơ trùng SĐT; vui lòng kiểm tra.':'Không tìm thấy hồ sơ PVNA khớp SĐT.';return}
+   const player=players[0],score=player.doubleScore;
+   if(score!=null&&Number.isFinite(Number(score))){rating.value=String(score);status.textContent='✓ PVNA: '+player.name+' · Điểm đôi: '+score}
+   else status.textContent='Tìm thấy '+player.name+' nhưng chưa có điểm PVNA.';
+  }catch(e){if(id===sequence)status.textContent='Không tra cứu được: '+e.message}
+ };
+ phone.addEventListener('input',()=>{clearTimeout(timer);sequence++;rating.value='';status.textContent='Đang chờ nhập đủ SĐT…';timer=setTimeout(run,550)});
+ phone.addEventListener('blur',()=>{clearTimeout(timer);void run()});
+ noPvna.addEventListener('change',()=>{clearTimeout(timer);sequence++;rating.value='';status.textContent=noPvna.checked?'Đã chọn Chưa có PVNA.':'Nhập SĐT để tự động tra cứu PVNA.'});
+}
+setupPvnaLookup();setupPvnaLookup('partner_','partnerPvnaLookupStatus');
 const fields=(form,prefix='')=>Object.fromEntries(['full_name','nickname','pvna_phone','pvna_rating','other_system','other_rating','self_rating'].map(k=>[k,form.elements.namedItem(prefix+k)?.value?.trim()||'']));
 $('registerForm').onsubmit=async ev=>{
  ev.preventDefault();const form=ev.currentTarget,button=$('submitRegistration');$('message').textContent='';
