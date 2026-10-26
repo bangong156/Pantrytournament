@@ -47,7 +47,8 @@ $('registerForm').onsubmit=async ev=>{
   if(fresh){if(!partner.full_name||!partner.nickname||partner.pvna_phone.length<8)throw Error('Điền đủ thông tin partner.');partner.portrait_url=await upload(form.elements.namedItem('partner_portrait').files[0])}
   const {error}=await db.rpc('pantry_register_athlete',{p_profile:profile,p_entries:checked,p_partner:partner});
   if(error)throw error;
-  form.reset();$('partnerSection').classList.add('hidden');$('newPartnerFields').classList.add('hidden');$('message').style.color='#2c7335';$('message').textContent='Đăng ký thành công!';await load();
+  form.reset();$('partnerSection').classList.add('hidden');$('newPartnerFields').classList.add('hidden');$('message').style.color='#2c7335';$('message').textContent='Đăng ký thành công!';await if(location.hash==='#register')tab('register');else tab('list');
+load();
  }catch(e){$('message').style.color='#ad382e';$('message').textContent='Đăng ký thất bại: '+e.message}
  finally{button.disabled=false;button.textContent='Gửi đăng ký'}
 };
