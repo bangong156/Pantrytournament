@@ -145,3 +145,31 @@ header{height:76px;padding:0 max(32px,calc((100vw - 1480px)/2));display:flex;ali
 .discovery-card-body>.discovery-actions{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:8px!important;width:100%;max-width:100%;min-width:0;box-sizing:border-box;margin-top:0}
 .discovery-card-body>.discovery-actions>button{display:block;width:100%;max-width:100%;min-width:0;min-height:44px;box-sizing:border-box;white-space:normal;overflow-wrap:anywhere;padding:9px 6px;font-size:12px}
 @media(max-width:700px){.discovery-card-body{display:flex;flex-direction:column;gap:12px}.discovery-card-body>.discovery-register{margin-top:8px}.discovery-card-body>.discovery-actions{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important}}
+
+/* Mobile-first tournament page: prevent poster cropping and horizontal overflow */
+@media(max-width:767px){
+ html,body{width:100%;max-width:100%;overflow-x:hidden}
+ #app,#app>header,#app>main{width:100%;max-width:100%;min-width:0}
+ #app>.public-header{height:auto!important;min-height:0!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:12px!important;padding:14px 16px!important}
+ #app>.public-header .pantry-header-brand{width:100%;min-width:0;justify-content:flex-start}
+ #app>.public-header .homepage-guide-actions{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:7px!important;width:100%!important;margin:0!important;padding:0!important;min-width:0!important}
+ #app>.public-header .homepage-guide-actions>*{width:100%;min-width:0;max-width:100%;box-sizing:border-box;display:flex!important;align-items:center;justify-content:center;text-align:center;white-space:normal!important;overflow-wrap:anywhere;padding:9px 5px!important;font-size:11px!important;line-height:1.25}
+ #app>.discovery-home,#app>main.discovery-home{width:100%!important;max-width:100%!important;margin:0!important;padding:12px 16px 36px!important;min-width:0!important}
+ .discovery-home .public-hero{display:block;min-width:0;padding:20px 0!important}
+ .discovery-home .public-hero h1{font-size:clamp(27px,7.3vw,36px)!important;line-height:1.12;overflow-wrap:break-word}
+ .discovery-home .public-hero p{font-size:13px}
+ .discovery-home .discovery-browse,.discovery-home .discovery-live-section{width:100%;max-width:100%;min-width:0;padding-left:0;padding-right:0}
+ .discovery-home .discovery-grid,.discovery-home .discovery-browse .discovery-grid,.discovery-home .discovery-live-section .discovery-grid{display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:16px!important;width:100%;max-width:100%;min-width:0;margin-left:0;margin-right:0}
+ .discovery-home .discovery-grid>.discovery-card{width:100%!important;max-width:100%!important;min-width:0!important;margin:0!important;padding:0!important;display:flex;flex-direction:column;overflow:hidden}
+ .discovery-home .discovery-poster{height:auto!important;min-height:0!important;aspect-ratio:auto!important;width:100%!important;max-width:100%!important;overflow:hidden;background:#e7e8df}
+ .discovery-home .discovery-poster-image{display:block!important;position:static!important;width:100%!important;max-width:100%!important;height:auto!important;max-height:520px!important;aspect-ratio:auto!important;object-fit:contain!important;object-position:center!important;transform:none!important}
+ .discovery-home .discovery-poster-placeholder{min-height:220px}
+ .discovery-home .discovery-poster-status{top:8px;right:8px;font-size:9px}
+ .discovery-home .discovery-card-body{display:flex;flex-direction:column;width:100%;max-width:100%;min-width:0;padding:15px!important;gap:10px}
+ .discovery-home .discovery-card-body h3{font-size:20px!important;line-height:1.25;margin:0;overflow-wrap:anywhere}
+ .discovery-home .discovery-card-body>.discovery-register{display:flex!important;align-items:center;justify-content:center;flex:none!important;width:100%!important;min-width:0!important;max-width:100%!important;min-height:44px;margin:5px 0 0!important;padding:11px!important}
+ .discovery-home .discovery-card-body>.discovery-actions{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:8px!important;width:100%!important;max-width:100%!important;min-width:0!important;margin:0!important}
+ .discovery-home .discovery-card-body>.discovery-actions>button{width:100%!important;max-width:100%!important;min-width:0!important;min-height:42px;padding:8px 5px!important;font-size:11px!important;white-space:normal!important;overflow-wrap:anywhere}
+ .discovery-home .discovery-tabs{display:flex;flex-wrap:wrap;gap:8px;width:100%;max-width:100%;overflow:visible}
+ .discovery-home .discovery-tabs button{flex:1 1 auto;min-width:0;max-width:100%;font-size:11px;padding:10px 8px;white-space:normal}
+}
