@@ -123,3 +123,19 @@ header{height:76px;padding:0 max(32px,calc((100vw - 1480px)/2));display:flex;ali
 .discovery-card-body .discovery-register{display:flex;flex:1 0 100%;align-items:center;justify-content:center;min-height:44px;box-sizing:border-box;padding:12px 16px;border-radius:10px;background:#dfefbb;color:#26381b;text-decoration:none;font-size:13px;font-weight:900;letter-spacing:.025em;border:1px solid #c5dc96;transition:background .2s,transform .2s}
 .discovery-card-body .discovery-register:hover{background:#cce99a;transform:translateY(-1px)}
 .discovery-card-body .discovery-register:focus-visible{outline:3px solid #567333;outline-offset:2px}
+
+/* Mobile overflow regression: registration CTA and card buttons */
+.discovery-card-body,.discovery-card-body .discovery-actions{min-width:0;max-width:100%;box-sizing:border-box}
+.discovery-card-body .discovery-actions{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.discovery-card-body .discovery-actions .discovery-register{grid-column:1/-1;width:100%;min-width:0;min-height:46px;white-space:normal;overflow-wrap:anywhere;flex:none}
+.discovery-card-body .discovery-actions button{width:100%;min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere;flex:none;padding:11px 8px}
+@media(max-width:700px){
+ .discovery-home,.discovery-browse,.discovery-live-section,.discovery-grid,.discovery-card,.discovery-card-body{min-width:0;width:100%;max-width:100%;box-sizing:border-box}
+ .discovery-grid .discovery-card{overflow:hidden}
+ .discovery-card-body .discovery-actions{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px}
+ .discovery-card-body .discovery-actions .discovery-register{grid-column:1/-1!important}
+ .discovery-card-body .discovery-actions button{font-size:12px;min-height:44px}
+ .discovery-poster{width:100%;max-width:100%;aspect-ratio:4/3}
+ .discovery-poster-image{width:100%;max-width:100%;object-fit:cover}
+ .discovery-home .discovery-tabs{min-width:0;max-width:100%;overflow-x:auto}
+}
