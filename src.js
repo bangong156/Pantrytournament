@@ -101,9 +101,9 @@ const eventType=t=>t.event_type==='minigame'?'MINIGAME':'GIẢI ĐẤU';
 const eventFormat=t=>t.format==='mlp'?'Đồng đội / MLP':'Đánh đôi';
 function discoveryCard(t,live=false,progress=''){
  const id=esc(t.id),status=live?'🟢 ĐANG DIỄN RA':eventCategory(t.start_date,vietnamToday())==='upcoming'?'📅 SẮP DIỄN RA':'🏆 ĐÃ KẾT THÚC';
- const poster=posterUrl(t.id,t.poster_path);
+ const poster=posterUrl(t.id,t.poster_path),registrationUrl=registrationLink(t.registration_url);
  const visual=poster?`<img class="discovery-poster-image" src="${esc(poster)}" alt="Poster giải ${esc(t.name)}" loading="lazy" decoding="async">`:`<div class="discovery-poster-placeholder"><span>THE PANTRY</span><strong>${esc(t.name)}</strong><small>PICKLEBALL TOURNAMENT</small></div>`;
- return `<article class="discovery-card ${live?'discovery-live':''}" data-enter-tournament="${id}" tabindex="0" role="link" aria-label="Vào giải ${esc(t.name)}"><div class="discovery-poster">${visual}<span class="discovery-poster-status ${live?'live-status':''}">${status}</span></div><div class="discovery-card-body"><div class="discovery-card-top"><span class="pill">${eventType(t)} · ${eventFormat(t)}</span></div><h3>${esc(t.name)}</h3><p class="discovery-date">📆 ${esc(displayEventDate(t.start_date))}${t.start_time?' · '+esc(t.start_time.slice(0,5)):''}</p>${progress}<div class="discovery-actions">${live?`<button data-hub="${id}">XEM GIẢI →</button><button class="secondary" data-info="${id}">Thông tin giải</button>`:`<button class="secondary" data-info="${id}">Thông tin giải</button><button data-hub="${id}">Chi tiết giải →</button>`}</div></div></article>`;
+ return `<article class="discovery-card ${live?'discovery-live':''}" data-enter-tournament="${id}" tabindex="0" role="link" aria-label="Vào giải ${esc(t.name)}"><div class="discovery-poster">${visual}<span class="discovery-poster-status ${live?'live-status':''}">${status}</span></div><div class="discovery-card-body"><div class="discovery-card-top"><span class="pill">${eventType(t)} · ${eventFormat(t)}</span></div><h3>${esc(t.name)}</h3><p class="discovery-date">📆 ${esc(displayEventDate(t.start_date))}${t.start_time?' · '+esc(t.start_time.slice(0,5)):''}</p>${progress}<div class="discovery-actions">${registrationUrl?`<a class="discovery-register" href="${esc(registrationUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Đăng ký giải ${esc(t.name)}">ĐĂNG KÝ GIẢI ↗</a>`:'' }${live?`<button data-hub="${id}">XEM GIẢI →</button><button class="secondary" data-info="${id}">Thông tin giải</button>`:`<button class="secondary" data-info="${id}">Thông tin giải</button><button data-hub="${id}">Chi tiết giải →</button>`}</div></div></article>`;
 }
 async function publicDashboard(selectedCategory=null){
  if(typeof history!=='undefined')history.replaceState(null,'',location.pathname);
@@ -111,11 +111,11 @@ async function publicDashboard(selectedCategory=null){
  const {data:t,error}=await supabase.from('tournaments').select('id,name,event_type,format,start_date,start_time').order('start_date');
  if(epoch!==renderEpoch)return;
  if(error){app.innerHTML=`<main class="wrap"><p>${esc(error.message)}</p><button id="retryDiscovery">Thử lại</button></main>`;document.querySelector('#retryDiscovery').onclick=()=>publicDashboard();return}
- const {data:posters,error:posterError}=await supabase.from('tournament_info').select('tournament_id,poster_path').in('tournament_id',(t||[]).map(x=>x.id).length?(t||[]).map(x=>x.id):['00000000-0000-0000-0000-000000000000']);
+ const {data:posters,error:posterError}=await supabase.from('tournament_info').select('tournament_id,poster_path,registration_url').in('tournament_id',(t||[]).map(x=>x.id).length?(t||[]).map(x=>x.id):['00000000-0000-0000-0000-000000000000']);
  if(epoch!==renderEpoch)return;
  if(posterError)console.warn('Tournament posters unavailable:',posterError.message);
- const posterMap=new Map((posters||[]).map(x=>[x.tournament_id,x.poster_path]));
- (t||[]).forEach(x=>{x.poster_path=posterMap.get(x.id)||null});
+ const posterMap=new Map((posters||[]).map(x=>[x.tournament_id,x]));
+ (t||[]).forEach(x=>{const info=posterMap.get(x.id);x.poster_path=info?.poster_path||null;x.registration_url=info?.registration_url||null});
  const today=vietnamToday(),all=t||[],live=all.filter(x=>eventCategory(x.start_date,today)==='live').sort((a,b)=>a.name.localeCompare(b.name,'vi')||a.id.localeCompare(b.id)),upcoming=all.filter(x=>eventCategory(x.start_date,today)==='upcoming').sort((a,b)=>eventDate(a.start_date).localeCompare(eventDate(b.start_date))||a.name.localeCompare(b.name,'vi')),completed=all.filter(x=>eventCategory(x.start_date,today)==='completed').sort((a,b)=>eventDate(b.start_date).localeCompare(eventDate(a.start_date))||a.name.localeCompare(b.name,'vi'));
  const category=selectedCategory==='completed'||selectedCategory==='upcoming'?selectedCategory:upcoming.length?'upcoming':'completed';
  const counts=Object.fromEntries(await Promise.all(live.map(async tournament=>{
@@ -137,6 +137,7 @@ async function publicDashboard(selectedCategory=null){
  document.querySelector('#adminLogin').onclick=login;
  document.querySelectorAll('[data-category]').forEach(b=>b.onclick=()=>publicDashboard(b.dataset.category));
  document.querySelectorAll('[data-hub]').forEach(b=>b.onclick=e=>{e.stopPropagation();publicTournament(b.dataset.hub)});
+ document.querySelectorAll('.discovery-register').forEach(link=>link.onclick=e=>e.stopPropagation());
  document.querySelectorAll('[data-info]').forEach(b=>b.onclick=e=>{e.stopPropagation();publicTournamentInfo(b.dataset.info)});
  document.querySelectorAll('[data-enter-tournament]').forEach(card=>{card.onclick=()=>publicTournament(card.dataset.enterTournament);card.onkeydown=e=>{if(e.target===card&&(e.key==='Enter'||e.key===' ')){e.preventDefault();publicTournament(card.dataset.enterTournament)}}});
  discoveryTimer=setInterval(()=>{if(vietnamToday()!==today)publicDashboard(category)},60000);
