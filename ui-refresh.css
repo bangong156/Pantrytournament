@@ -139,3 +139,9 @@ header{height:76px;padding:0 max(32px,calc((100vw - 1480px)/2));display:flex;ali
  .discovery-poster-image{width:100%;max-width:100%;object-fit:cover}
  .discovery-home .discovery-tabs{min-width:0;max-width:100%;overflow-x:auto}
 }
+
+/* Registration is now its own full-width row, separate from action buttons */
+.discovery-card-body>.discovery-register{display:flex;flex:none;align-items:center;justify-content:center;width:100%;max-width:100%;min-width:0;min-height:46px;box-sizing:border-box;padding:12px 14px;margin-top:auto;border:1px solid #c5dc96;border-radius:10px;background:#dfefbb;color:#26381b;text-align:center;text-decoration:none;font-size:13px;font-weight:900;white-space:normal}
+.discovery-card-body>.discovery-actions{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:8px!important;width:100%;max-width:100%;min-width:0;box-sizing:border-box;margin-top:0}
+.discovery-card-body>.discovery-actions>button{display:block;width:100%;max-width:100%;min-width:0;min-height:44px;box-sizing:border-box;white-space:normal;overflow-wrap:anywhere;padding:9px 6px;font-size:12px}
+@media(max-width:700px){.discovery-card-body{display:flex;flex-direction:column;gap:12px}.discovery-card-body>.discovery-register{margin-top:8px}.discovery-card-body>.discovery-actions{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important}}
