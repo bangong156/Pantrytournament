@@ -474,14 +474,14 @@ function mlpStyleFields(){return `<div class="mlpbox"><p class="label">Style MLP
 function createTypeMenu(){
  if(isOrganizer()&&(!organizerValid(organizerState)||!organizerState.account.can_create_tournaments))return organizerBlocked('Tài khoản chưa được phép tạo giải.');
  const modal=document.querySelector('#modal');
- modal.innerHTML=`<div class="overlay"><div class="modal create-type-menu" role="dialog" aria-modal="true" aria-labelledby="createTypeTitle"><div class="modalhead"><div><small>THE PANTRY</small><h2 id="createTypeTitle">Bạn muốn tạo gì?</h2></div><button type="button" class="x" id="closeCreateTypes" aria-label="Đóng">×</button></div><div class="create-type-list"><button type="button" data-create-type="tournament">🏆 Tạo Tournament</button><button type="button" data-create-type="minigame">🎯 Tạo Mini Tournament</button><button type="button" data-create-type="social">👥 Tạo Social <small>Chưa thiết lập</small></button><button type="button" data-create-type="roundrobin">🎲 Tạo Roundrobin</button><button type="button" data-create-type="arena">⚔️ Tạo Đấu Trường <small>Chưa thiết lập</small></button></div><p id="createTypeNote" class="muted" role="status">Social và Đấu Trường sẽ được xây dựng sau khi có quy trình vận hành.</p></div></div>`;
+ modal.innerHTML=`<div class="overlay"><div class="modal create-type-menu" role="dialog" aria-modal="true" aria-labelledby="createTypeTitle"><div class="modalhead"><div><small>THE PANTRY</small><h2 id="createTypeTitle">Bạn muốn tạo gì?</h2></div><button type="button" class="x" id="closeCreateTypes" aria-label="Đóng">×</button></div><div class="create-type-list"><button type="button" data-create-type="tournament">🏆 Tạo Tournament</button><button type="button" data-create-type="minigame">🎯 Tạo Mini Tournament</button><button type="button" data-create-type="social">👥 Tạo Social <small>Chưa thiết lập</small></button><button type="button" data-create-type="roundrobin">🎲 Tạo Roundrobin</button><button type="button" data-create-type="arena">⚔️ Tạo Đấu Trường</button></div><p id="createTypeNote" class="muted" role="status">Đấu Trường mở phiên riêng để ghi trận, tiền sân và bảng xếp hạng trong ngày.</p></div></div>`;
  modal.querySelector('#closeCreateTypes').onclick=()=>modal.innerHTML='';
  modal.querySelector('.overlay').addEventListener('click',e=>{if(e.target.classList.contains('overlay'))modal.innerHTML=''});
  modal.querySelectorAll('[data-create-type]').forEach(b=>b.onclick=()=>{
   const type=b.dataset.createType;
   if(type==='tournament'||type==='minigame'){createModal(type);return}
   if(type==='roundrobin'){window.location.assign('/roundrobin.html');return}
-  if(type==='arena'){window.location.assign('https://dautruongsua.xyz/private-arena');return}
+  if(type==='arena'){window.location.assign('https://dautruongsua.xyz/private-arena/start');return}
   modal.querySelector('#createTypeNote').textContent=type==='social'?'Tạo Social: đang chờ bạn cung cấp cách vận hành.':'Tạo Đấu Trường: đang chờ bạn cung cấp cách vận hành.';
  });
 }
