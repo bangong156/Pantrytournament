@@ -294,3 +294,11 @@ header{height:76px;padding:0 max(32px,calc((100vw - 1480px)/2));display:flex;ali
   white-space:normal!important;
  }
 }
+
+/* Five creation paths */
+.create-type-menu{max-width:480px;width:min(480px,calc(100vw - 28px));box-sizing:border-box}
+.create-type-list{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;margin:18px 0}
+.create-type-list button{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;min-width:0;min-height:52px;padding:13px 16px;text-align:left;font-size:15px;border-radius:12px}
+.create-type-list button small{font-size:10px;white-space:nowrap;opacity:.8}
+.create-type-menu #createTypeNote{font-size:12px;margin:8px 0 0}
+@media(max-width:700px){.create-type-menu{max-height:calc(100dvh - 32px);overflow-y:auto}.create-type-list button{font-size:14px}}
