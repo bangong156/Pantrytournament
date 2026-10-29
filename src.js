@@ -481,6 +481,7 @@ function createTypeMenu(){
   const type=b.dataset.createType;
   if(type==='tournament'||type==='minigame'){createModal(type);return}
   if(type==='roundrobin'){window.location.assign('/roundrobin.html');return}
+  if(type==='arena'){window.location.assign('https://dautruongsua.xyz/private-arena');return}
   modal.querySelector('#createTypeNote').textContent=type==='social'?'Tạo Social: đang chờ bạn cung cấp cách vận hành.':'Tạo Đấu Trường: đang chờ bạn cung cấp cách vận hành.';
  });
 }
