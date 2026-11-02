@@ -923,7 +923,16 @@ function shuffled(arr){
   for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}
   return a;
 }
-async function saveGroupDistribution(tid,count,teamIds,doShuffle=true,empty=false){const db=competitionClient(supabase,activeEvent);
+async function protectExistingCompetitionMatches(tid,operation){
+ const db=competitionClient(supabase,activeEvent);
+ const {data,error}=await db.from('matches').select('id,match_code,stage,status,team1_score,team2_score,winner_id,started_at,completed_at').eq('tournament_id',tid);
+ if(error)throw error;
+ const existing=data||[];
+ const locked=existing.filter(m=>m.status!=='scheduled'||m.started_at||m.completed_at||m.winner_id||m.team1_score!==null||m.team2_score!==null);
+ if(locked.length)throw new Error('Không thể '+operation+': đã có '+locked.length+' trận bắt đầu, có kết quả hoặc có trạng thái không còn chờ. Không được xóa dữ liệu thi đấu.');
+ if(existing.some(m=>m.stage!=='group'))throw new Error('Không thể '+operation+': đã có nhánh Knockout. Vui lòng kiểm tra giải trước khi thay đổi bảng.');
+}
+async function saveGroupDistribution(tid,count,teamIds,doShuffle=true,empty=false){await protectExistingCompetitionMatches(tid,'chia lại bảng');const db=competitionClient(supabase,activeEvent);
   count=empty?Number(count):Math.max(1,Math.min(Number(count)||1,Math.max(1,teamIds.length)));
   const ids=doShuffle?shuffled(teamIds):[...teamIds];
   const {data:oldGroups,error:oldErr}=await db.from('groups').select('id').eq('tournament_id',tid);
@@ -939,7 +948,7 @@ async function saveGroupDistribution(tid,count,teamIds,doShuffle=true,empty=fals
   const links=(empty?[]:ids).map((teamId,i)=>({group_id:groups[i%count].id,team_id:teamId}));
   if(links.length){const {error:e5}=await db.from('group_teams').insert(links);if(e5)throw e5}
 }
-async function createGroupSchedule(tid){const db=competitionClient(supabase,activeEvent);
+async function createGroupSchedule(tid){await protectExistingCompetitionMatches(tid,'tạo lại lịch');const db=competitionClient(supabase,activeEvent);
   const [{data:groups,error:ge},{data:links,error:le},{data:registered,error:re}]=await Promise.all([
     db.from('groups').select('*').eq('tournament_id',tid).order('group_order'),
     db.from('group_teams').select('*'),
@@ -1146,7 +1155,7 @@ async function renderMatches(tid){const db=competitionClient(supabase,activeEven
   if(isBasic){document.querySelectorAll('[data-open-mlp]').forEach(b=>b.onclick=()=>{const m=(matches||[]).find(x=>x.id===b.dataset.openMlp);openMlpMatch(m,tm,tid)});return}
   document.querySelectorAll('[data-save]').forEach(b=>{const id=b.dataset.save,i1=document.querySelector(`[data-s1="${id}"]`),i2=document.querySelector(`[data-s2="${id}"]`);const markChanged=()=>{const dirty=i1.value!==i1.dataset.original||i2.value!==i2.dataset.original;if(dirty){b.textContent='Lưu thay đổi';b.classList.remove('saved-btn')}else if(i1.dataset.original!==''&&i2.dataset.original!==''){b.textContent='✓ Đã lưu';b.classList.add('saved-btn')}else{b.textContent='Lưu tỉ số';b.classList.remove('saved-btn')}};i1.addEventListener('input',markChanged);i2.addEventListener('input',markChanged);b.onclick=async()=>{let s1=i1.value,s2=i2.value;if(s1===''||s2==='')return alert('Nhập đủ 2 tỉ số');s1=+s1;s2=+s2;if(s1===s2)return alert('Tỉ số không được hòa');let m=(matches||[]).find(x=>x.id===id),winner=s1>s2?m.team1_id:m.team2_id;b.disabled=true;b.textContent='Đang lưu…';let {error}=await db.from('matches').update({team1_score:s1,team2_score:s2,winner_id:winner,status:'completed',completed_at:new Date().toISOString()}).eq('id',id);if(error){b.disabled=false;b.textContent='Lưu lại';return alert(error.message)}if(epoch===renderEpoch)await renderMatches(tid)}});
 }
-async function standingsData(tid){const db=competitionClient(supabase,activeEvent);const {data:groups}=await db.from('groups').select('*').eq('tournament_id',tid).order('group_order');const {data:teams}=await db.from('teams').select('id,name').eq('tournament_id',tid);const {data:links}=await db.from('group_teams').select('*').in('group_id',(groups||[]).map(g=>g.id).length?(groups||[]).map(g=>g.id):['00000000-0000-0000-0000-000000000000']);const {data:matches}=await db.from('matches').select('*').eq('tournament_id',tid).eq('stage','group').eq('status','completed');let tm=Object.fromEntries((teams||[]).map(x=>[x.id,x.name]));let out=[];for(let g of groups||[]){let ids=(links||[]).filter(x=>x.group_id===g.id).map(x=>x.team_id),rows=ids.map(id=>({id,name:tm[id],p:0,w:0,l:0,pf:0,pa:0,diff:0})),map=Object.fromEntries(rows.map(r=>[r.id,r]));(matches||[]).filter(m=>m.group_id===g.id).forEach(m=>{let a=map[m.team1_id],b=map[m.team2_id];if(!a||!b)return;a.p++;b.p++;a.pf+=m.team1_score;a.pa+=m.team2_score;b.pf+=m.team2_score;b.pa+=m.team1_score;if(m.winner_id===a.id){a.w++;b.l++}else{b.w++;a.l++}});rows.forEach(r=>r.diff=r.pf-r.pa);rows.sort((a,b)=>b.w-a.w||b.diff-a.diff||b.pf-a.pf);out.push({group:g,rows})}return out}
+async function standingsData(tid){const db=competitionClient(supabase,activeEvent);const {data:groups}=await db.from('groups').select('*').eq('tournament_id',tid).order('group_order');const {data:teams}=await db.from('teams').select('id,name').eq('tournament_id',tid);const {data:links}=await db.from('group_teams').select('*').in('group_id',(groups||[]).map(g=>g.id).length?(groups||[]).map(g=>g.id):['00000000-0000-0000-0000-000000000000']);const {data:matches}=await db.from('matches').select('*').eq('tournament_id',tid).eq('stage','group').eq('status','completed');let tm=Object.fromEntries((teams||[]).map(x=>[x.id,x.name]));let out=[];for(let g of groups||[]){let ids=(links||[]).filter(x=>x.group_id===g.id).map(x=>x.team_id),rows=ids.map(id=>({id,name:tm[id],p:0,w:0,l:0,pf:0,pa:0,diff:0})),map=Object.fromEntries(rows.map(r=>[r.id,r]));(matches||[]).filter(m=>m.group_id===g.id).forEach(m=>{let a=map[m.team1_id],b=map[m.team2_id];if(!a||!b)return;a.p++;b.p++;a.pf+=m.team1_score;a.pa+=m.team2_score;b.pf+=m.team2_score;b.pa+=m.team1_score;if(m.winner_id===a.id){a.w++;b.l++}else if(m.winner_id===b.id){b.w++;a.l++}else{a.p--;b.p--;a.pf-=m.team1_score;a.pa-=m.team2_score;b.pf-=m.team2_score;b.pa-=m.team1_score;console.warn('Bỏ qua trận thiếu người thắng hợp lệ:',m.id)}});rows.forEach(r=>r.diff=r.pf-r.pa);rows.sort((a,b)=>b.w-a.w||b.diff-a.diff||b.pf-a.pf);out.push({group:g,rows})}return out}
 
 async function renderRefereeAdmin(tid){const db=competitionClient(supabase,activeEvent);
  const epoch=renderEpoch;
