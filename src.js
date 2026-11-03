@@ -898,7 +898,7 @@ async function editTeamModal(team,members,pm,t){
    const replacements=[];
    for(let i=0;i<rows.length;i++){
     const m=rows[i],oldName=pm[m.player_id]?.full_name||'';
-    const player=names[i]===oldName?{id:m.player_id}:await getOrCreatePlayer(names[i]);
+    const player=names[i]===oldName?{id:m.player_id}:await (async()=>{const {data,error}=await supabase.rpc('organizer_roster_player',{p_tournament:t.id,p_name:names[i],p_gender:null}).single();if(error)throw error;return data})();
     replacements.push({slot_order:m.slot_order,old_player_id:m.player_id,player_id:player.id});
    }
    const {error:memberError}=await supabase.rpc('pantry_replace_team_members',{p_event:event.id,p_team:team.id,p_members:replacements});
