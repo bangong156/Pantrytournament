@@ -61,7 +61,7 @@ export function buildBracket(result,preplan=null){
   let next;
   if(n===8){const get=(g,p)=>entrant(q.find(x=>x.group_id===result.snapshot.standings[g].group_id&&x.group_position===p));next=round('round_of_16','R16',[[0,1,1,2],[2,1,3,2],[4,1,5,2],[6,1,7,2],[7,1,6,2],[5,1,4,2],[3,1,2,2],[1,1,0,2]].flatMap(([a,p,b,r])=>[get(a,p),get(b,r)]));}
   else if(n>=6)next=round('round_of_16','R16',assign16(q));
-  else if(n===4){const get=(gid,p)=>entrant(q.find(x=>x.group_id===gid&&x.group_position===p));const ids=result.snapshot.standings.map(x=>x.group_id);const pairs=Array.isArray(preplan)&&preplan.length===2&&new Set(preplan.flat()).size===4&&preplan.flat().every(id=>ids.includes(id))?preplan:[[ids[0],ids[1]],[ids[2],ids[3]]];next=pairs.flatMap(([a,b])=>[get(a,1),get(b,2),get(b,1),get(a,2)]);}
+  else if(n===4){const get=(gid,p)=>entrant(q.find(x=>x.group_id===gid&&x.group_position===p));const ids=result.snapshot.standings.map(x=>x.group_id);const pairs=Array.isArray(preplan)&&preplan.length===2&&new Set(preplan.flat()).size===4&&preplan.flat().every(id=>ids.includes(id))?preplan:[[ids[0],ids[2]],[ids[1],ids[3]]];next=pairs.flatMap(([a,b])=>[get(a,1),get(b,2),get(b,1),get(a,2)]);}
   else {
     const winners=q.filter(x=>x.group_position===1).map(entrant),others=q.filter(x=>x.group_position!==1).map(entrant);
     let best=Infinity,playoffs,qf;
@@ -85,7 +85,7 @@ export function buildBracket(result,preplan=null){
     };
     pairings(others);round('playoff','PO',playoffs);next=qf;
   }
-  next=round('quarterfinal','QF',next);next=round('semifinal','SF',next);round('final','F',next);return nodes;
+  next=round('quarterfinal','QF',next);if(n===4)next=[next[0],next[2],next[1],next[3]];next=round('semifinal','SF',next);round('final','F',next);return nodes;
 }
 export function sourceLabel(match,side,matches,teamNames){
   return teamNames[match[`team${side}_id`]]||`Thắng ${match[`team${side}_source_code`]||(match[`team${side}_source_match_id`]&&matches.find(m=>m.id===match[`team${side}_source_match_id`])?.match_code)||'chưa xác định'}`;
