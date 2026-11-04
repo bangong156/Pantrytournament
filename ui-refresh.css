@@ -307,3 +307,56 @@ header{height:76px;padding:0 max(32px,calc((100vw - 1480px)/2));display:flex;ali
 .team-poster-public{display:block;width:100%;aspect-ratio:4/5;object-fit:contain;border-radius:12px;background:#101a15;margin-bottom:12px}
 .team-poster-admin{width:76px;height:96px;object-fit:cover;border-radius:8px;flex-shrink:0}
 @media(max-width:600px){.team-poster-admin{width:56px;height:72px}}
+
+/* Mobile-first scaling pass — admin, public hub, team roster and dialogs */
+html,body{max-width:100%;overflow-x:clip}
+#app,#workcontent,.workspace,.panel{min-width:0}
+img,video,canvas,svg{max-width:100%}
+.team-line{display:flex;align-items:center;gap:12px;min-width:0}
+.team-line>div:not(.actions){flex:1;min-width:0;overflow-wrap:anywhere}
+.team-line .actions{justify-content:flex-end}
+@media(max-width:900px){
+ .workspace{grid-template-columns:minmax(0,1fr);gap:14px}
+ .workspace aside{position:static;display:flex;flex-direction:row;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;gap:6px;border-radius:12px;padding:8px}
+ .workspace aside button{flex:0 0 auto;width:auto;white-space:nowrap;min-height:44px;padding:10px 13px}
+ .workspace>section,.workspace>main{width:100%;min-width:0}
+ .group-grid,.group-board{grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))}
+ .public-hub-team-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr))}
+}
+@media(max-width:700px){
+ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+ body{font-size:14px}
+ #app{width:100%;overflow-x:clip}
+ .wrap{width:calc(100% - 24px);max-width:100%;margin-inline:auto}
+ .workspace h1,.hero h1{font-size:clamp(24px,7vw,34px);line-height:1.13;overflow-wrap:anywhere}
+ h2{overflow-wrap:anywhere}
+ .panel,.card{min-width:0}
+ .toolbar{display:flex;flex-wrap:wrap;gap:8px}
+ .toolbar button,.toolbar a{flex:1 1 140px;width:auto;min-width:0;white-space:normal}
+ .team-line{display:grid;grid-template-columns:minmax(0,1fr);gap:9px;padding:14px 0}
+ .team-line:has(.team-poster-admin){grid-template-columns:64px minmax(0,1fr)}
+ .team-line .team-poster-admin{width:64px;height:82px;grid-row:1}
+ .team-line>div:not(.actions){grid-column:1/-1}
+ .team-line:has(.team-poster-admin)>div:not(.actions){grid-column:2}
+ .team-line .actions{grid-column:1/-1;justify-content:flex-start;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+ .team-line .actions button{width:100%;min-width:0;padding:10px 7px;min-height:44px;font-size:12px;white-space:normal}
+ .roster-paste{padding:12px}
+ .roster-paste textarea{width:100%;min-width:0}
+ .overlay{padding:12px;align-items:center;overflow-y:auto}
+ .modal{width:min(100%,560px);max-width:100%;max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain;padding:18px 15px}
+ .modal input,.modal select,.modal textarea,input[type=text],input[type=number],input[type=email],input[type=password],select,textarea{max-width:100%;min-width:0;font-size:16px}
+ .modal .actions{display:flex;flex-wrap:wrap;gap:8px}
+ .modal .actions button{min-height:44px;flex:1 1 110px}
+ .public-hub-team-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr))}
+ .public-hub-team-card{min-width:0}
+ .team-poster-public{max-height:360px;object-fit:contain}
+ .table,table{max-width:100%}
+ .table{overflow-x:auto;-webkit-overflow-scrolling:touch}
+ .group-column,.group-card{min-width:0}
+}
+@media(max-width:390px){
+ .wrap{width:calc(100% - 20px)}
+ .team-line .actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .public-hub-team-grid{grid-template-columns:minmax(0,1fr)}
+ .toolbar button,.toolbar a{flex-basis:100%}
+}
