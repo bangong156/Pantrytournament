@@ -201,7 +201,8 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
               draws=nextDraws;if(isCurrent())paint();
             }catch(error){preview.querySelector('#koError').textContent=error.message;button.disabled=false}
           });
-          const exportButton=preview.querySelector('#koPreviewExport');if(exportButton)exportButton.onclick=()=>openKnockoutPoster(nodes,Object.fromEntries(result.qualifiers.map(q=>[q.team_id,q.name])),event.name);\n          const redrawButton=preview.querySelector('#koRedraw');if(redrawButton)redrawButton.onclick=()=>{redraw=true;paint()};
+          const exportButton=preview.querySelector('#koPreviewExport');if(exportButton)exportButton.onclick=()=>openKnockoutPoster(nodes,Object.fromEntries(result.qualifiers.map(q=>[q.team_id,q.name])),event.name);
+          const redrawButton=preview.querySelector('#koRedraw');if(redrawButton)redrawButton.onclick=()=>{redraw=true;paint()};
           const generate=preview.querySelector('#koGenerate');if(generate)generate.onclick=async()=>{
             if(!isCurrent())return;
             if(!confirm(managed?'Xác nhận thay thế toàn bộ nhánh Knockout chưa bắt đầu của nội dung này?':'Xác nhận tạo nhánh Knockout theo bản xem trước?'))return;
