@@ -457,3 +457,20 @@ img,video,canvas,svg{max-width:100%}
   min-width:112px;min-height:44px;white-space:normal!important;
  }
 }
+
+/* Match names stay full-width on phones; hidden VS must not shift team B into a narrow track. */
+@media(max-width:767px){
+ .match-control-page .match-card .versus{
+  display:flex!important;flex-direction:column!important;align-items:stretch!important;
+  width:100%!important;min-width:0!important;gap:6px!important;
+ }
+ .match-control-page .match-card .versus>.team-name{
+  display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;
+  text-align:left!important;white-space:normal!important;word-break:normal!important;
+  overflow-wrap:break-word!important;font-size:15px;line-height:1.4;
+ }
+ .match-control-page .match-card .versus>.vs{
+  display:block!important;width:100%!important;text-align:left!important;
+  font-size:10px;line-height:1.2;color:#707567;
+ }
+}
