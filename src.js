@@ -974,6 +974,62 @@ async function createGroupSchedule(tid){await protectExistingCompetitionMatches(
   const {error:statusError}=await supabase.from('tournament_events').update({status:'group_stage'}).eq('id',db.event.id);
   if(statusError)throw statusError;
 }
+function showGroupResultPoster(tournamentName,eventName,groups,links,teams,unassigned){
+ const modal=document.querySelector('#modal');
+ const tm=new Map(teams.map(t=>[t.id,t.name||'Đội']));
+ const columns=groups.map(g=>({name:g.name,teams:links.filter(l=>l.group_id===g.id).map(l=>tm.get(l.team_id)||'Đội')}));
+ const missing=unassigned.length;
+ const cols=Math.min(4,Math.max(1,columns.length));
+ const rows=Math.ceil(columns.length/cols);
+ const maxEntries=Math.max(1,...columns.map(g=>g.teams.length));
+ const cardW=520,gap=26,margin=70,headerH=270,footerH=110;
+ const cardH=Math.max(230,110+maxEntries*51);
+ const width=Math.max(1080,margin*2+cols*cardW+(cols-1)*gap);
+ const height=headerH+rows*cardH+(rows-1)*gap+footerH;
+ const canvas=document.createElement('canvas');
+ const scale=width>3200?1:1.5;canvas.width=Math.round(width*scale);canvas.height=Math.round(height*scale);
+ const ctx=canvas.getContext('2d');ctx.scale(scale,scale);
+ ctx.fillStyle='#142218';ctx.fillRect(0,0,width,height);
+ ctx.fillStyle='#e5efce';ctx.fillRect(0,0,width,15);
+ ctx.fillStyle='#a7bf84';ctx.font='700 28px system-ui,sans-serif';ctx.fillText('THE PANTRY  /  TOURNAMENT',margin,82);
+ const fit=(value,maxWidth,fontSize,minSize=19)=>{let size=fontSize;do{ctx.font='800 '+size+'px system-ui,sans-serif';if(ctx.measureText(value).width<=maxWidth)break;size-=2}while(size>minSize);return size};
+ const title=String(tournamentName||'KẾT QUẢ CHIA BẢNG');
+ ctx.fillStyle='#ffffff';fit(title,width-margin*2,61,26);ctx.fillText(title,margin,158);
+ ctx.fillStyle='#c9d5ba';ctx.font='500 30px system-ui,sans-serif';ctx.fillText('KẾT QUẢ CHIA BẢNG  •  '+String(eventName||'').slice(0,65),margin,211);
+ const wrap=(str,x,y,maxWidth,lineHeight,maxLines=2)=>{
+   const words=String(str).split(/\s+/),lines=[];let line='';
+   for(const word of words){const trial=line?line+' '+word:word;if(ctx.measureText(trial).width>maxWidth&&line){lines.push(line);line=word}else line=trial}
+   if(line)lines.push(line);
+   lines.slice(0,maxLines).forEach((ln,i)=>ctx.fillText(ln,x,y+i*lineHeight));
+ };
+ columns.forEach((g,index)=>{
+   const col=index%cols,row=Math.floor(index/cols),x=margin+col*(cardW+gap),y=headerH+row*(cardH+gap);
+   ctx.fillStyle='#f6f4e9';ctx.beginPath();ctx.roundRect(x,y,cardW,cardH,22);ctx.fill();
+   ctx.fillStyle='#344a2e';ctx.beginPath();ctx.roundRect(x,y,cardW,91,[22,22,0,0]);ctx.fill();
+   ctx.fillStyle='#ffffff';ctx.font='800 39px system-ui,sans-serif';ctx.fillText('BẢNG '+g.name,x+27,y+58);
+   ctx.font='600 23px system-ui,sans-serif';ctx.textAlign='right';ctx.fillText(g.teams.length+' ĐỘI',x+cardW-25,y+55);ctx.textAlign='left';
+   g.teams.forEach((name,i)=>{const yy=y+141+i*51;ctx.fillStyle='#6b7c5b';ctx.font='700 24px system-ui,sans-serif';ctx.fillText(String(i+1).padStart(2,'0'),x+26,yy);ctx.fillStyle='#17251b';fit(name,cardW-104,27,17);wrap(name,x+78,yy,cardW-104,29,1)});
+   if(!g.teams.length){ctx.fillStyle='#879081';ctx.font='italic 25px system-ui,sans-serif';ctx.fillText('Chưa có đội',x+26,y+145)}
+ });
+ ctx.fillStyle='#b4c6a2';ctx.font='500 25px system-ui,sans-serif';ctx.fillText(columns.length+' bảng  •  '+teams.length+' đội'+(missing?'  •  '+missing+' đội chưa xếp bảng':''),margin,height-52);
+ ctx.textAlign='right';ctx.fillText('giaipantry.com',width-margin,height-52);ctx.textAlign='left';
+ const image=canvas.toDataURL('image/png');
+ modal.innerHTML=`<div class="overlay"><div class="modal group-result-modal"><div class="modalhead"><div><small>CHIA BẢNG</small><h2>Ảnh kết quả chia bảng</h2></div><button type="button" class="x" aria-label="Đóng">×</button></div><p>Ảnh tổng hợp toàn bộ bảng và tên đội, sẵn sàng gửi cho VĐV.</p><img class="group-result-preview" alt="Ảnh kết quả chia bảng" src="${image}"><div class="actions"><button type="button" id="downloadGroupPoster">⬇ Tải ảnh PNG</button><button type="button" class="secondary" id="shareGroupPoster">Chia sẻ ảnh</button><button type="button" class="ghost" id="closeGroupPoster">Đóng</button></div><p id="groupPosterNotice" role="status"></p></div></div>`;
+ const close=()=>modal.innerHTML='';
+ modal.querySelector('.x').onclick=close;modal.querySelector('#closeGroupPoster').onclick=close;
+ const fileName='pantry-chia-bang-'+new Date().toISOString().slice(0,10)+'.png';
+ modal.querySelector('#downloadGroupPoster').onclick=()=>{const a=document.createElement('a');a.href=image;a.download=fileName;document.body.appendChild(a);a.click();a.remove()};
+ modal.querySelector('#shareGroupPoster').onclick=async()=>{
+  const note=modal.querySelector('#groupPosterNotice');
+  try{
+   if(!navigator.share||!navigator.canShare)throw Error('Thiết bị chưa hỗ trợ chia sẻ ảnh trực tiếp. Hãy bấm Tải ảnh PNG.');
+   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('Không thể tạo ảnh.');
+   const file=new File([blob],fileName,{type:'image/png'});
+   if(!navigator.canShare({files:[file]}))throw Error('Thiết bị chưa hỗ trợ chia sẻ file ảnh. Hãy tải PNG.');
+   await navigator.share({files:[file],title:'Kết quả chia bảng'});
+  }catch(error){if(error.name!=='AbortError')note.textContent=error.message}
+ };
+}
 async function showGroups(tid){const db=competitionClient(supabase,activeEvent);const epoch=renderEpoch;
   const [{data:teams,error:te},{data:groups,error:ge}]=await Promise.all([
     db.from('teams').select('*').eq('tournament_id',tid).order('registration_order'),
@@ -994,9 +1050,10 @@ async function showGroups(tid){const db=competitionClient(supabase,activeEvent);
   const counts=freshGroups.map(g=>links.filter(x=>x.group_id===g.id).length);
   const maxGroups=Math.max(1,(teams||[]).length);
   document.querySelector('#workcontent').innerHTML=`<div class="page-kicker">CHIA BẢNG</div><div class="groups-title"><div><h1>${esc(currentTournament.name)}</h1><p>${teams.length} đội · Chọn số bảng, hệ thống tự chia đều.</p></div></div>
-  <div class="panel group-control"><div class="group-control-main"><label>Số bảng<input id="groupCount" type="number" min="1" max="${maxGroups}" value="${Math.max(1,freshGroups.length)}"></label><div class="balance-preview">Phân bổ hiện tại: <b>${counts.length?counts.join(' · '):teams.length}</b> đội</div></div><div class="group-actions"><button id="divideGroups">CHIA BẢNG TỰ ĐỘNG</button><button id="manualGroups">TỰ CHIA BẢNG</button><button class="ghost" id="reshuffleGroups">Xáo lại</button><button id="lockGroups" ${unassigned.length?'disabled':''}>XÁC NHẬN CHIA BẢNG & TẠO TRẬN</button></div></div>
+  <div class="panel group-control"><div class="group-control-main"><label>Số bảng<input id="groupCount" type="number" min="1" max="${maxGroups}" value="${Math.max(1,freshGroups.length)}"></label><div class="balance-preview">Phân bổ hiện tại: <b>${counts.length?counts.join(' · '):teams.length}</b> đội</div></div><div class="group-actions"><button id="divideGroups">CHIA BẢNG TỰ ĐỘNG</button><button id="manualGroups">TỰ CHIA BẢNG</button><button class="ghost" id="reshuffleGroups">Xáo lại</button><button class="secondary" id="groupResultPoster">📷 KẾT QUẢ CHIA BẢNG</button><button id="lockGroups" ${unassigned.length?'disabled':''}>XÁC NHẬN CHIA BẢNG & TẠO TRẬN</button></div></div>
   <p>${teams.length} ĐỘI · ${freshGroups.length} BẢNG · ${teams.length-unassigned.length} ĐÃ XẾP · ${unassigned.length} CHƯA CÓ BẢNG</p>${unassigned.length?`<p role="alert">⚠️ CÒN ${unassigned.length} ĐỘI CHƯA CÓ BẢNG</p>`:''}
   <div class="group-board">${freshGroups.map(g=>{const gl=links.filter(x=>x.group_id===g.id);return `<section class="group-column"><div class="group-column-head"><div><small>BẢNG</small><h2>${esc(g.name)}</h2></div><span>${gl.length} đội ${readinessBadge(gl.map(x=>tm[x.team_id]).filter(Boolean))}</span></div><div class="group-team-list">${gl.map((x,i)=>`<div class="group-team"><span class="team-index">${i+1}</span><b>${esc(tm[x.team_id]?.name||'Đội')}</b><label style="grid-column:2;margin:0">CHUYỂN BẢNG<select data-move-team="${x.team_id}" data-from="${g.id}" title="CHUYỂN BẢNG" aria-label="CHUYỂN BẢNG · ${esc(tm[x.team_id]?.name||'')}"><option value="">ĐƯA RA CHƯA CÓ BẢNG</option>${freshGroups.map(dest=>`<option value="${dest.id}" ${dest.id===g.id?'selected':''}>Bảng ${esc(dest.name)}</option>`).join('')}</select></label></div>`).join('')||'<div class="group-empty">Chưa có đội</div>'}</div></section>`}).join('')}</div><section class="panel"><h2>VĐV / ĐỘI CHƯA CÓ BẢNG</h2>${unassigned.map(t=>`<div class="team-line"><b>${esc(t.name)}</b><select data-assign-team="${t.id}" aria-label="Chọn bảng cho ${esc(t.name)}"><option value="">CHỌN BẢNG ▼</option>${freshGroups.map(g=>`<option value="${g.id}">Bảng ${esc(g.name)}</option>`).join('')}</select></div>`).join('')||'<p>Tất cả đã có bảng.</p>'}</section>`;
+  document.querySelector('#groupResultPoster').onclick=()=>showGroupResultPoster(currentTournament.name,activeEvent?.name||'',freshGroups,links,teams,unassigned);
   document.querySelector('#manualGroups').onclick=()=>{
     const modal=document.querySelector('#modal');
     modal.innerHTML=`<div class="overlay"><form class="modal"><h2>TẠO BẢNG THỦ CÔNG</h2><label>Số bảng cần tạo:<input name="count" type="number" min="1" step="1" value="5" required></label><p>Thay thế bảng hiện tại và lịch vòng bảng chưa thi đấu của nội dung này.</p><p role="alert"></p><div class="actions"><button type="button" class="secondary">HỦY</button><button type="submit">TẠO BẢNG</button></div></form></div>`;
