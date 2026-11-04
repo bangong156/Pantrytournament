@@ -152,7 +152,7 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
           ids.forEach((id,side)=>names[id]=pair[side]);
           nodes.push({match_code:'TK-'+(i+1),stage:'quarterfinal',scheduled_order:i+1,team1_id:ids[0],team2_id:ids[1],team1_score:null,team2_score:null});
         });
-        for(let i=0;i<2;i++)nodes.push({match_code:'BK-'+(i+1),stage:'semifinal',scheduled_order:5+i,team1_source_code:'TK-'+(i*2+1),team2_source_code:'TK-'+(i*2+2),team1_score:null,team2_score:null});
+        for(let i=0;i<2;i++)nodes.push({match_code:'BK-'+(i+1),stage:'semifinal',scheduled_order:5+i,team1_source_code:'TK-'+(i+1),team2_source_code:'TK-'+(i+3),team1_score:null,team2_score:null});
         nodes.push({match_code:'CK-1',stage:'final',scheduled_order:7,team1_source_code:'BK-1',team2_source_code:'BK-2',team1_score:null,team2_score:null});
         openKnockoutPoster(nodes,names,event.name);
       };
@@ -161,7 +161,7 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
         plan.innerHTML=`<h2>VẼ NHÁNH TRƯỚC VÒNG BẢNG</h2><p>4 bảng · 8 đội vào Tứ kết. Chọn hai cặp bảng đối đầu, mỗi bảng chỉ được chọn một lần.</p>
           <div class="ko-pairings">${pairings.map(([a,b],i)=>`<label>Cặp bảng ${i+1} <select data-pair="${i}" data-side="0">${options}</select> ↔ <select data-pair="${i}" data-side="1">${options}</select></label>`).join('')}</div>
           <h3>XEM TRƯỚC TỨ KẾT</h3><div class="ko-preplan-grid">${symbolic().map((x,i)=>`<div class="ko-preplan-match"><strong>TỨ KẾT ${i+1}</strong><div>${esc(x[0])}</div><div>${esc(x[1])}</div></div>`).join('')}</div>
-          <p>Tứ kết → Bán kết → Chung kết. Tên đội sẽ được xác định theo BXH sau khi vòng bảng kết thúc.</p>
+          <p>Bán kết 1: Thắng TK1 vs Thắng TK3. Bán kết 2: Thắng TK2 vs Thắng TK4. Các đội cùng bảng chỉ có thể gặp lại ở chung kết. Tên đội sẽ được xác định theo BXH sau vòng bảng.</p>
           <button id="koSavePreplan">LƯU NHÁNH THEO BẢNG</button> <button id="koExportPreplan" class="secondary">📷 XUẤT ẢNH NHÁNH TỨ KẾT → CHUNG KẾT</button><p role="alert" id="koPreplanError"></p>`;
         plan.querySelectorAll('select').forEach(el=>{el.value=pairings[Number(el.dataset.pair)][Number(el.dataset.side)];el.onchange=()=>{pairings[Number(el.dataset.pair)][Number(el.dataset.side)]=el.value;paintPlan()}});
         plan.querySelector('#koExportPreplan').onclick=exportPlan;
