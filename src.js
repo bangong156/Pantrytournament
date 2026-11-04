@@ -1209,6 +1209,21 @@ async function renderMatches(tid){const db=competitionClient(supabase,activeEven
       button.onclick=async()=>{button.disabled=true;try{const {showBroadcasterQR}=await import('./video-ui.js');await showBroadcasterQR(supabase,matchId)}catch(error){alert(error.message)}finally{button.disabled=false}};
     });
   }
+  if(canOperate(tid)){
+    document.querySelectorAll('[data-save]').forEach(control=>{
+      const match=(matches||[]).find(m=>m.id===control.dataset.save);
+      if(!match||match.status!=='playing'||match.stage!=='group')return;
+      const button=document.createElement('button');button.type='button';button.className='danger reset-live-match';button.textContent='↺ Hủy LIVE / Reset trận';
+      control.closest('.match-card')?.querySelector('.call-order')?.append(button);
+      button.onclick=async()=>{
+        if(!confirm('RESET TRẬN '+match.match_code+'?\\n\\nXóa toàn bộ điểm thử, hủy LIVE, giải phóng sân và đưa trận về CHƯA BẮT ĐẦU. Không thể hoàn tác. Chỉ thực hiện nếu trận chưa có kết quả thật.'))return;
+        button.disabled=true;button.textContent='Đang reset…';
+        const {error}=await supabase.rpc('pantry_reset_live_match',{p_event:activeEvent.id,p_match:match.id});
+        if(error){alert('Không thể reset: '+error.message);button.disabled=false;button.textContent='↺ Hủy LIVE / Reset trận';return}
+        if(epoch===renderEpoch)await renderMatches(tid);
+      };
+    });
+  }
   startLive(`admin:matches:${tid}`,()=>renderMatches(tid));
   if(isBasic){document.querySelectorAll('[data-open-mlp]').forEach(b=>b.onclick=()=>{const m=(matches||[]).find(x=>x.id===b.dataset.openMlp);openMlpMatch(m,tm,tid)});return}
   document.querySelectorAll('[data-save]').forEach(b=>{const id=b.dataset.save,i1=document.querySelector(`[data-s1="${id}"]`),i2=document.querySelector(`[data-s2="${id}"]`);const markChanged=()=>{const dirty=i1.value!==i1.dataset.original||i2.value!==i2.dataset.original;if(dirty){b.textContent='Lưu thay đổi';b.classList.remove('saved-btn')}else if(i1.dataset.original!==''&&i2.dataset.original!==''){b.textContent='✓ Đã lưu';b.classList.add('saved-btn')}else{b.textContent='Lưu tỉ số';b.classList.remove('saved-btn')}};i1.addEventListener('input',markChanged);i2.addEventListener('input',markChanged);b.onclick=async()=>{let s1=i1.value,s2=i2.value;if(s1===''||s2==='')return alert('Nhập đủ 2 tỉ số');s1=+s1;s2=+s2;if(s1===s2)return alert('Tỉ số không được hòa');let m=(matches||[]).find(x=>x.id===id),winner=s1>s2?m.team1_id:m.team2_id;b.disabled=true;b.textContent='Đang lưu…';let {error}=await db.from('matches').update({team1_score:s1,team2_score:s2,winner_id:winner,status:'completed',completed_at:new Date().toISOString()}).eq('id',id);if(error){b.disabled=false;b.textContent='Lưu lại';return alert(error.message)}if(epoch===renderEpoch)await renderMatches(tid)}});
