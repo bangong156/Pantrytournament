@@ -360,3 +360,10 @@ img,video,canvas,svg{max-width:100%}
  .public-hub-team-grid{grid-template-columns:minmax(0,1fr)}
  .toolbar button,.toolbar a{flex-basis:100%}
 }
+
+/* Shareable group draw image preview */
+.group-result-modal{width:min(96vw,950px);max-height:calc(100dvh - 24px);overflow:auto}
+.group-result-preview{display:block;width:100%;height:auto;max-height:65dvh;object-fit:contain;background:#142218;border-radius:12px;margin:12px 0 18px}
+.group-result-modal .actions{display:flex;flex-wrap:wrap;gap:10px}
+.group-result-modal .actions button{flex:1 1 170px;min-height:44px}
+@media(max-width:700px){.group-result-modal{width:100%;padding:16px}.group-result-preview{max-height:55dvh}}
