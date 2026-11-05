@@ -178,3 +178,6 @@
  .panel.standings table{min-width:560px}
  .panel.standings th:nth-child(2),.panel.standings td:nth-child(2){white-space:normal;min-width:140px}
 }
+@media(max-width:767px){
+ .public-hub-tabs button.public-hub-tab-active{background:#344326!important;color:#fff!important;box-shadow:none}
+}
