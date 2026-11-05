@@ -11,6 +11,7 @@ import { parseRosterRows } from './roster-import.js'
 import { competitionClient } from './event-scope.js'
 import { createClient } from '@supabase/supabase-js'
 import './style.css'
+import './mobile.css'
 import pantryLogo from './assets/the-pantry-logo.png'
 const pantryLogoMarkup=(className)=>`<img class="pantry-logo ${className}" src="${pantryLogo}" alt="The Pantry">`
 const supabase=createClient('https://duuklzzxpegptsarcbqq.supabase.co','sb_publishable_FmGKX67AD3M4QvCuL3dSyg_w0X5vIX9',{global:{fetch:organizerFetch(()=>String(profile?.role||'').toLowerCase(),()=>setTimeout(()=>organizerBlocked(),0))}})

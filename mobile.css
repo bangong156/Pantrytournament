@@ -1,0 +1,180 @@
+/* Shared responsive rules, loaded after each page's base styles. */
+@media(max-width:900px){
+ :where(main,section,article,form,fieldset,.panel,.card,.workspace,#workcontent){min-width:0}
+ :where(button,input,select,textarea){max-width:100%;box-sizing:border-box}
+ .workspace{grid-template-columns:minmax(0,1fr)!important}
+ .workspace>section{width:100%;min-width:0}
+ .workspace aside button{color:#e1e8d9}
+ .workspace aside button.nav-active{color:#26331d!important}
+ .group-board,.group-grid,.ref-admin-grid,.competition-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))}
+ .ref-admin-actions,.ref-admin-code-row,.awards-third-heading,.awards-selected-summary{flex-wrap:wrap}
+ .ref-admin-actions>*{flex:1 1 110px;min-width:0}
+ .ref-admin-code-row strong{min-width:0;max-width:100%;overflow-wrap:anywhere}
+ .knockout-scroll{width:100%;max-width:100%;overflow-x:auto}
+ .knockout-bracket{max-width:none}
+ .public-event-selector,.competition-tabs{max-width:100%;min-width:0}
+}
+@media(max-width:767px){
+ /* Explicitly retain hidden state against older display overrides. */
+ [hidden],#homepageLive[hidden]{display:none!important}
+ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+ button{touch-action:manipulation;min-height:44px;white-space:normal;line-height:1.35}
+ input,select,textarea{font-size:16px!important;min-width:0;max-width:100%}
+ input:not([type=checkbox]):not([type=radio]),select{min-height:44px}
+ textarea{width:100%;box-sizing:border-box}
+ :where(p,h1,h2,h3,small,.notice,[role=alert],[role=status]){overflow-wrap:break-word}
+ .wrap{padding-bottom:calc(28px + env(safe-area-inset-bottom))}
+ .toolbar{display:flex;flex-wrap:wrap;align-items:stretch}
+ .toolbar>input,.toolbar>select{flex:1 1 160px;width:auto;min-width:0}
+ .toolbar>button{flex:1 1 130px;min-width:0;max-width:100%}
+ .workspace aside button{color:#e1e8d9!important;font-size:12px}
+ .workspace aside button.nav-active{color:#26331d!important}
+ .workspace-header>div:first-child b{white-space:normal!important;overflow:visible!important;text-overflow:clip}
+ .public-tournament-header,.ref-header{height:auto;min-height:64px;padding:10px 12px;flex-wrap:wrap;gap:8px}
+ .public-tournament-header>div:first-child,.ref-header>div:first-child{flex:1 1 100%;min-width:0;flex-wrap:wrap}
+ .public-tournament-header>div:first-child b,.ref-header>div:first-child b{white-space:normal;overflow:visible;overflow-wrap:break-word;flex:1 1 130px;font-size:14px}
+ .public-tournament-header #beReferee{width:100%;white-space:normal}
+ .public-hub-tabs{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:5px!important;overflow:visible!important;padding:5px!important}
+ .public-hub-tabs button{width:100%;min-width:0;white-space:normal!important;padding:9px 4px;letter-spacing:0}
+ .public-event-head,.match-page-title{gap:12px}
+ .public-hub-section-head{flex-wrap:wrap}
+ .public-hub-match-code,.public-court{white-space:normal;overflow-wrap:break-word}
+ .public-hub-match-team button{white-space:normal;overflow-wrap:break-word}
+ .event-info-identity{min-width:0}
+ .event-info-identity h1{font-size:clamp(26px,7vw,36px)}
+ .event-info-actions{width:100%;max-width:100%}
+ .info-editor .panel{padding:16px}
+ .team-line .actions{width:100%}
+ .group-team b{min-width:0;overflow-wrap:break-word}
+ .group-control-main{width:100%;min-width:0}
+ .group-control-main select{min-width:0;max-width:100%}
+ .match-control-page .call-order{row-gap:8px!important}
+ .match-control-page .call-order .match-court-select{max-width:100%;font-size:16px!important;min-height:44px}
+ .match-reorder button{min-height:44px;min-width:44px;font-size:18px;padding:5px 9px}
+ .match-control-page .match-card .video-enable{min-height:44px}
+ .live-standing{max-width:100%;overflow-x:auto}
+ .live-standing th,.live-standing td{padding:8px 5px}
+ .live-standing td:nth-child(2){white-space:normal;overflow-wrap:break-word;min-width:85px}
+ .ref-start-options{gap:8px}
+ .ref-start-options>label{flex-wrap:wrap;min-width:0;max-width:100%}
+ .ref-admin-actions{display:flex;flex-wrap:wrap}
+ .ref-admin-actions button{min-height:44px;white-space:normal}
+ .ref-log-row{grid-template-columns:minmax(0,1fr);gap:5px}
+ .ref-log-row>*{min-width:0;overflow-wrap:anywhere}
+ .ref-match-teams{overflow-wrap:break-word}
+ .ref-admin-code-row button{min-height:44px}
+ .operations .ops-team>div{min-width:0;max-width:100%;overflow-wrap:break-word}
+ .operations .actions{display:flex;flex-wrap:wrap;gap:8px}
+ .operations .ops-fee-toggle{white-space:normal;min-height:44px}
+ .operations progress{width:100%}
+ .knockout-card .match-court-select,.knockout-score input,.knockout-score button,.knockout-card .public-video-button{min-height:44px}
+ .knockout-score{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
+ .knockout-score>button{grid-column:1/-1;width:100%;height:auto}
+ .awards-third-heading{align-items:flex-start;gap:10px}
+ .awards-selected-summary button,.awards-manual,.awards-delete{min-height:44px}
+ .awards-save-bar button{width:100%}
+ .modal{max-height:calc(100dvh - 24px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+ .modalhead{gap:12px;align-items:flex-start}
+ .modalhead>div,.modalhead h2{min-width:0;overflow-wrap:break-word}
+ .modalhead .x{flex:0 0 44px;min-width:44px;min-height:44px}
+ .modal .twocol,.modal .formats{grid-template-columns:minmax(0,1fr)}
+ .modal fieldset{min-width:0;max-width:100%;margin-inline:0}
+ .modal .actions{display:flex;flex-wrap:wrap;gap:8px}
+ .modal .actions>button{flex:1 1 110px;min-width:0;min-height:44px}
+ .guide-selector select{font-size:16px;min-height:44px}
+ .guide-dialog.contact-dialog{width:calc(100% - 24px);max-height:calc(100dvh - 24px)}
+ .scorekeeper-shell .scorekeeper-header{flex-wrap:wrap;height:auto}
+ .scorekeeper-shell .scorekeeper-header>div{flex:1 1 110px}
+ .scorekeeper-shell .scorekeeper-rules{flex-wrap:wrap}
+ .scorekeeper-shell .scorekeeper-confirm-actions{flex-wrap:wrap}
+ .scorekeeper-shell .scorekeeper-confirm-actions button{min-width:0;flex:1 1 130px}
+ /* Standalone pages have no Tournament stylesheet. */
+ .athletes-page .wrap,.quick-play-page .wrap{width:100%;min-width:0;padding:20px 12px calc(32px + env(safe-area-inset-bottom))}
+ .athletes-page .panel,.quick-play-page .panel{min-width:0;padding:15px}
+ .athletes-page .tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .athletes-page .tabs button{min-width:0;padding:10px 6px;font-size:13px}
+ .athletes-page .tabs #adminAthleteToggle{grid-column:1/-1}
+ .athletes-page .person{align-items:flex-start;min-width:0}
+ .athletes-page .person img{flex:0 0 62px}
+ .athletes-page .person>div{min-width:0;overflow-wrap:break-word}
+ .athletes-page .profile-hero{flex-wrap:wrap;min-width:0}
+ .athletes-page .profile-hero>div{flex:1 1 150px;min-width:0;overflow-wrap:break-word}
+ .athletes-page .profile-stat{min-width:0;overflow-wrap:break-word}
+ .athletes-page input[type=file]{width:100%;max-width:100%}
+ .athletes-page .gender-options{flex-wrap:wrap}
+ .athletes-page #adminAthleteLogin{display:grid;gap:10px}
+ .athletes-page #adminAthleteEdit>button{width:100%;margin-top:8px}
+ .quick-play-page .toolbar>*{flex:1 1 100%;width:100%;min-width:0;max-width:100%}
+ .quick-play-page .grid{grid-template-columns:minmax(0,1fr)}
+ .quick-play-page .team{overflow-wrap:break-word}
+ .quick-play-page .match{grid-template-columns:minmax(0,1fr) 54px 14px 54px;gap:8px;font-size:14px;min-width:0}
+ .quick-play-page .match>div:first-child{grid-column:1;grid-row:1;min-width:0;overflow-wrap:break-word}
+ .quick-play-page .match>div.right{grid-column:1;grid-row:2;text-align:left;min-width:0;overflow-wrap:break-word}
+ .quick-play-page .match>input:first-of-type{grid-column:2;grid-row:1/3}
+ .quick-play-page .match>.vs{grid-column:3;grid-row:1/3}
+ .quick-play-page .match>input:last-of-type{grid-column:4;grid-row:1/3}
+ .quick-play-page .match>input{font-size:18px!important;min-height:48px}
+ .quick-play-page .match-delete{grid-column:1/-1;grid-row:3;min-height:44px}
+ .quick-play-page .scroll{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}
+ .quick-play-page .scroll table{min-width:520px}
+}
+@media(min-width:768px) and (max-width:900px){
+ .match-control-page .group-live-grid{grid-template-columns:minmax(0,1fr)}
+ .match-control-page .match-card{grid-template-columns:minmax(0,1fr)}
+ .match-control-page .match-card>*{grid-column:1;min-width:0}
+ .match-control-page .match-card .versus{grid-template-columns:minmax(0,1fr);gap:8px}
+ .match-control-page .match-card .team-name{white-space:normal;text-align:left;overflow-wrap:break-word}
+ .match-control-page .score-box{justify-content:center}
+}
+
+/* Phone headers use normal document flow, never the desktop shared subgrid. */
+@media(max-width:1050px){
+ body:has(#app > :is(.public-home-header,.dashboard-header)){display:block!important;grid-template-columns:none!important}
+ body:has(#app > :is(.public-home-header,.dashboard-header)) > #app{display:block!important;width:100%;min-width:0}
+ body:has(#app > :is(.public-home-header,.dashboard-header)) #homepageGuide{
+  position:static!important;display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  grid-column:auto!important;grid-row:auto!important;width:100%!important;max-width:100%!important;
+  margin:0!important;padding:10px 12px!important;gap:6px!important;z-index:auto!important;
+ }
+ body:has(#app > :is(.public-home-header,.dashboard-header)) #homepageGuide>*{
+  min-width:0!important;max-width:100%!important;width:100%!important;margin:0!important;
+  white-space:normal!important;overflow-wrap:break-word;min-height:44px;box-sizing:border-box;
+ }
+ body:has(#app > :is(.public-home-header,.dashboard-header)) #app > header{
+  position:static!important;display:flex!important;flex-direction:row!important;flex-wrap:wrap!important;
+  grid-template-columns:none!important;grid-template-rows:none!important;grid-row:auto!important;
+  height:auto!important;min-height:64px!important;padding:10px 12px!important;gap:10px!important;
+  width:100%!important;max-width:100%!important;box-sizing:border-box;align-items:center!important;
+ }
+ body:has(#app > :is(.public-home-header,.dashboard-header)) .pantry-header-brand{
+  grid-column:auto!important;grid-row:auto!important;flex:1 1 100px!important;
+  width:auto!important;min-width:0!important;padding:0!important;
+ }
+ body:has(#app > :is(.public-home-header,.dashboard-header)) #app > header > :last-child{
+  grid-column:auto!important;grid-row:auto!important;flex:0 1 auto!important;min-width:0!important;
+  width:auto!important;max-width:100%!important;padding:0!important;margin:0!important;
+  display:flex!important;flex-wrap:wrap!important;gap:6px!important;justify-content:flex-end!important;
+ }
+ #app>header.public-home-header .homepage-guide-actions #adminLogin{
+  min-width:112px;min-height:44px;white-space:normal!important;
+ }
+}
+
+
+@media(max-width:1050px){
+ #app>header.public-home-header .homepage-guide-actions>a{display:none!important}
+ body:has(#app > :is(.public-home-header,.dashboard-header)) #homepageGuide>*{display:flex;align-items:center;justify-content:center;text-align:center;min-height:44px}
+ body:has(#app > :is(.public-home-header,.dashboard-header)) #app>main{width:100%;max-width:100%;min-width:0}
+}
+@media(max-width:767px){body:not(:has(#app > :is(.public-home-header,.dashboard-header))) #homepageGuide{display:none!important}}
+@media(max-width:767px){
+ .public-hub-table-wrap{width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}
+ .public-hub-standings table{width:100%;min-width:0;table-layout:fixed}
+ .public-hub-standings th,.public-hub-standings td{padding:9px 4px;font-size:12px;white-space:normal;overflow-wrap:break-word;text-align:center}
+ .public-hub-standings th:first-child,.public-hub-standings td:first-child{width:8%}
+ .public-hub-standings th:nth-child(2),.public-hub-standings td:nth-child(2){width:42%;text-align:left}
+ .public-hub-standings .public-hub-team-link{font-size:13px;white-space:normal;overflow-wrap:break-word}
+ .panel.standings{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}
+ .panel.standings table{min-width:560px}
+ .panel.standings th:nth-child(2),.panel.standings td:nth-child(2){white-space:normal;min-width:140px}
+}
