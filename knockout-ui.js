@@ -5,6 +5,26 @@ import {matchStatus} from './spectator.js';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 // Layout only: source references determine visual positions; persisted matches
 // and their order/participants are never changed by the bracket renderer.
+function fiveGroupPreview(groups){
+  const exampleGroup=groups.at(-1);
+  const standings=groups.map(group=>({
+    group,
+    rows:Array.from({length:group===exampleGroup?3:2},(_,i)=>({
+      id:`${group.id}:${i+1}`,
+      name:`${group.name}${i+1}`,
+      w:0,diff:0,pf:0
+    }))
+  }));
+  const result=qualify(standings);
+  const labels=Object.fromEntries(result.qualifiers.map(team=>[team.team_id,team.name]));
+  return `<details class="panel">
+    <summary><strong>Xem trước nhánh 5 bảng · A1, B2…</strong></summary>
+    <p>5 đội nhất bảng vào thẳng tứ kết. 5 đội nhì bảng và đội hạng ba tốt nhất đá 3 trận playoff.</p>
+    <p>Sơ đồ minh họa giả sử <strong>${esc(exampleGroup.name)}3</strong> nhận vé vớt. Cặp đấu thực tế được xác định sau vòng bảng.</p>
+    ${publicBracket(buildBracket(result),labels)}
+  </details>`;
+}
+
 export function publicBracket(matches,teamNames,{admin=false}={}){
   const rounds=knockoutStages.map(stage=>({stage,matches:matches.filter(m=>m.stage===stage)
     .sort((a,b)=>(a.scheduled_order??0)-(b.scheduled_order??0))})).filter(r=>r.matches.length);
@@ -134,6 +154,8 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
     // Save symbolic group pairings before round-robin results exist.
     const groupInput=await rpc('pantry_knockout_inputs');
     const planGroups=(groupInput.groups||[]).slice().sort((a,b)=>a.group_order-b.group_order);
+    if(!isCurrent())return;
+    if(planGroups.length===5)controls.insertAdjacentHTML('beforebegin',fiveGroupPreview(planGroups));
     let knockoutPreplan=null;
     if(planGroups.length===4){
       const {data:savedPlan,error:planError}=await client.rpc('pantry_knockout_preplan_get',{p_event:event.id});
