@@ -6,7 +6,8 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 // Layout only: source references determine visual positions; persisted matches
 // and their order/participants are never changed by the bracket renderer.
 function fiveGroupPreview(groups){
-  const exampleGroup=groups.at(-1);
+  const pantryGroup=groups.find(group=>group.id==='edd73fb4-9e56-4885-856a-63453b146df0');
+  const exampleGroup=pantryGroup||groups.at(-1);
   const standings=groups.map(group=>({
     group,
     rows:Array.from({length:group===exampleGroup?3:2},(_,i)=>({
@@ -19,8 +20,8 @@ function fiveGroupPreview(groups){
   const labels=Object.fromEntries(result.qualifiers.map(team=>[team.team_id,team.name]));
   return `<details class="panel">
     <summary><strong>Xem trước nhánh 5 bảng · A1, B2…</strong></summary>
-    <p>5 đội nhất bảng vào thẳng tứ kết. 5 đội nhì bảng và đội hạng ba tốt nhất đá 3 trận playoff.</p>
-    <p>Sơ đồ minh họa giả sử <strong>${esc(exampleGroup.name)}3</strong> nhận vé vớt. Cặp đấu thực tế được xác định sau vòng bảng.</p>
+    <p>5 đội nhất bảng vào thẳng tứ kết. 5 đội nhì bảng và ${pantryGroup?'đội hạng ba bảng E':'đội hạng ba tốt nhất'} đá 3 trận playoff.</p>
+    <p>${pantryGroup?'Vé vớt dành cho':'Sơ đồ minh họa giả sử'} <strong>${esc(exampleGroup.name)}3</strong> nhận vé vớt. Cặp đấu thực tế được xác định sau vòng bảng.</p>
     ${publicBracket(buildBracket(result),labels)}
   </details>`;
 }
