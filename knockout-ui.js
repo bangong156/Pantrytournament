@@ -143,6 +143,32 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
       if(managed&&event.format==='doubles'&&m.team1_id&&m.team2_id){
         const form=document.createElement('form');form.className='knockout-score';form.noValidate=true;
         form.innerHTML=`<label>Điểm đội 1<input name="s1" type="number" min="0" step="1" required value="${m.team1_score??''}"></label><span class="knockout-score-separator" aria-hidden="true">:</span><label>Điểm đội 2<input name="s2" type="number" min="0" step="1" required value="${m.team2_score??''}"></label><button>LƯU TỈ SỐ</button><p role="alert"></p>`;
+        const refereeButton=document.createElement('button');
+        refereeButton.type='button';refereeButton.className='secondary';
+        refereeButton.textContent='⚖ Trọng tài';
+        card.append(refereeButton);
+        refereeButton.onclick=()=>{
+          const overlay=document.createElement('div');overlay.className='overlay';
+          const scores=[m.team1_score??0,m.team2_score??0];
+          overlay.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-label="Trọng tài ${esc(m.match_code)}"><div class="modalhead"><h2>⚖ ${esc(m.match_code)}</h2><button type="button" class="x" aria-label="Đóng">×</button></div><div class="scorekeeper-teams">${[0,1].map(i=>`<section class="scorekeeper-team"><div class="scorekeeper-team-name">${esc(names[i===0?m.team1_id:m.team2_id])}</div><output class="scorekeeper-score" data-ko-score="${i}">${scores[i]}</output><div class="scorekeeper-actions"><button type="button" class="scorekeeper-plus" data-ko-team="${i}" data-ko-delta="1">＋</button><button type="button" class="scorekeeper-minus" data-ko-team="${i}" data-ko-delta="-1">−</button></div></section>`).join('')}</div><button type="button" class="wide" data-ko-finish>Kết thúc · Lưu tỉ số</button><p role="alert"></p></section>`;
+          document.body.append(overlay);
+          overlay.querySelector('.x').onclick=()=>overlay.remove();
+          overlay.querySelectorAll('[data-ko-team]').forEach(button=>button.onclick=()=>{
+            const i=Number(button.dataset.koTeam);
+            scores[i]=Math.max(0,scores[i]+Number(button.dataset.koDelta));
+            overlay.querySelector(`[data-ko-score="${i}"]`).textContent=scores[i];
+          });
+          overlay.querySelector('[data-ko-finish]').onclick=async()=>{
+            const errorBox=overlay.querySelector('[role=alert]');
+            if(scores[0]===scores[1]){errorBox.textContent='Trận knockout không được hòa.';return}
+            const buttons=overlay.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);
+            try{
+              await rpc('pantry_knockout_score',{p_match:m.id,p_expected_revision:decision.revision,p_expected_score_version:m.score_version,p_score1:scores[0],p_score2:scores[1]});
+              overlay.remove();
+              if(isCurrent())await renderManagedKnockout({client,event,host,standingsData,isCurrent,mountCourt,mountLive});
+            }catch(error){errorBox.textContent=error.message;buttons.forEach(button=>button.disabled=false)}
+          };
+        };
         card.append(form);form.onsubmit=async e=>{
           e.preventDefault();const b=form.querySelector('button'),errorBox=form.querySelector('[role=alert]');
           if(b.disabled)return;
