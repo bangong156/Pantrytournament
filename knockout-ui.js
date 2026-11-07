@@ -298,9 +298,11 @@ export function bindPublicKnockoutReferee(client,eventId,onSaved){
   if(!code)return;
   button.disabled=true;
   try{
+   const {data:state,error:stateError}=await client.rpc('pantry_knockout_referee_state',{p_code:code,p_event:eventId,p_match:button.dataset.koReferee});
+   if(stateError)throw stateError;
    const [{data:match,error:me},{data:decision,error:de},{data:teams,error:te}]=await Promise.all([
-    client.from('matches').select('*').eq('id',button.dataset.koReferee).eq('event_id',eventId).single(),
-    client.from('knockout_decisions').select('revision').eq('event_id',eventId).single(),
+    Promise.resolve({data:state.match}),
+    Promise.resolve({data:{revision:state.revision}}),
     client.from('teams').select('id,name').eq('event_id',eventId)
    ]);
    if(me||de||te)throw me||de||te;
