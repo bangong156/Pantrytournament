@@ -10,7 +10,8 @@ export function qualify(standings,draws=[]){
   const normalized=standings.map(({group,rows})=>({group_id:group.id,rows:rows.map((r,i)=>({team_id:r.id,group_position:i+1,wins:r.w,point_difference:r.diff,points_scored:r.pf}))}));
   const candidates=standings.flatMap(({group,rows})=>rows.slice(0,3).map((r,i)=>({team_id:r.id,group_id:group.id,group_name:group.name,name:r.name,group_position:i+1,point_difference:r.diff,points_scored:r.pf,qualification_type:['group_winner','runner_up','wildcard_third'][i],entry_stage:n===4?'quarterfinal':n===5?(i===0?'quarterfinal':'playoff'):'round_of_16'})));
   if(standings.some(s=>s.rows.length<2)||new Set(candidates.map(key)).size!==candidates.length)throw new Error('Mỗi bảng cần ít nhất 2 đội và không được trùng đội.');
-  const thirds=candidates.filter(q=>q.group_position===3).sort((a,b)=>compareWildcard(a,b)||key(a).localeCompare(key(b)));
+  const pantryWildcardGroup=standings.find(({group})=>group.id==='edd73fb4-9e56-4885-856a-63453b146df0')?.group.id;
+  const thirds=candidates.filter(q=>q.group_position===3&&(!pantryWildcardGroup||q.group_id===pantryWildcardGroup)).sort((a,b)=>compareWildcard(a,b)||key(a).localeCompare(key(b)));
   const count=({4:0,5:1,6:4,7:2,8:0})[n];
   if(thirds.length<count)throw new Error('Không đủ đội hạng 3 cho thể thức này.');
   const unresolved=[],usedDraws=[];
