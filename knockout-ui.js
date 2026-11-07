@@ -59,7 +59,7 @@ export function publicBracket(matches,teamNames,{admin=false}={}){
     return `<article class="knockout-card" ${m.id?`data-knockout-match="${esc(m.id)}"`:''} aria-label="${esc(m.match_code)}" style="grid-row:${positions.get(m)+1} / span 2">
       <div class="knockout-card-head"><${codeTag} class="knockout-code ${codeTag==='button'?'public-match-link':''}" ${m.id?`data-open-match="${esc(m.id)}"`:''}>${esc(m.match_code)}</${codeTag}><span class="knockout-card-state" ${m.id?`data-match-state="${esc(m.id)}"`:''} data-base-status="${matchStatus(m)}">${matchStatus(m)}</span></div>
       ${[1,2].map(side=>`<div class="knockout-team"><span>${esc(sourceLabel(m,side,matches,teamNames))}</span><strong aria-label="Điểm đội ${side}">${hasScore?esc(m[`team${side}_score`]??'—'):'—'}</strong></div>`).join('')}
-      <div class="knockout-card-footer"><span class="knockout-court">${courtLabel(m.court_number)||'Chưa xếp sân'}</span>${m.id?`<div class="public-video-slot" data-public-video="${esc(m.id)}" data-video-label="${esc(m.match_code)}"></div>`:''}</div>
+      ${!admin&&m.id&&m.team1_id&&m.team2_id?`<button type="button" class="secondary" data-ko-referee="${esc(m.id)}">⚖ Trọng tài</button>`:''}<div class="knockout-card-footer"><span class="knockout-court">${courtLabel(m.court_number)||'Chưa xếp sân'}</span>${m.id?`<div class="public-video-slot" data-public-video="${esc(m.id)}" data-video-label="${esc(m.match_code)}"></div>`:''}</div>
     </article>`;
   };
   const edges=index=>index===rounds.length-1?'':rounds[index+1].matches.flatMap(target=>sources(target)
@@ -290,4 +290,36 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
       }catch(error){controls.querySelector('[role=alert]').textContent=error.message}finally{b.disabled=false}
     };
   }catch(error){if(isCurrent())host.innerHTML=`<p role="alert">${esc(error.message)}</p>`}
+}
+
+export function bindPublicKnockoutReferee(client,eventId,onSaved){
+ document.querySelectorAll('[data-ko-referee]').forEach(button=>button.onclick=async()=>{
+  const code=prompt('Nhập mã trọng tài knockout');
+  if(!code)return;
+  button.disabled=true;
+  try{
+   const [{data:match,error:me},{data:decision,error:de},{data:teams,error:te}]=await Promise.all([
+    client.from('matches').select('*').eq('id',button.dataset.koReferee).eq('event_id',eventId).single(),
+    client.from('knockout_decisions').select('revision').eq('event_id',eventId).single(),
+    client.from('teams').select('id,name').eq('event_id',eventId)
+   ]);
+   if(me||de||te)throw me||de||te;
+   if(!match.team1_id||!match.team2_id)throw Error('Chưa đủ hai đội');
+   const names=Object.fromEntries(teams.map(t=>[t.id,t.name])),scores=[match.team1_score??0,match.team2_score??0];
+   const overlay=document.createElement('div');overlay.className='overlay';
+   overlay.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-label="Trọng tài knockout"><div class="modalhead"><h2>⚖ ${esc(match.match_code)}</h2><button type="button" class="x">×</button></div><div class="scorekeeper-teams">${[0,1].map(i=>`<section class="scorekeeper-team"><b>${esc(names[i===0?match.team1_id:match.team2_id])}</b><div class="scorekeeper-score" data-public-ko-score="${i}">${scores[i]}</div><div class="scorekeeper-actions"><button type="button" class="scorekeeper-plus" data-team="${i}" data-delta="1">＋</button><button type="button" class="scorekeeper-minus" data-team="${i}" data-delta="-1">−</button></div></section>`).join('')}</div><button type="button" data-finish>Kết thúc · Lưu tỉ số</button><p role="alert"></p></section>`;
+   document.body.append(overlay);overlay.querySelector('.x').onclick=()=>overlay.remove();
+   overlay.querySelectorAll('[data-team]').forEach(b=>b.onclick=()=>{
+    const i=Number(b.dataset.team);scores[i]=Math.max(0,scores[i]+Number(b.dataset.delta));
+    overlay.querySelector(`[data-public-ko-score="${i}"]`).textContent=scores[i];
+   });
+   overlay.querySelector('[data-finish]').onclick=async()=>{
+    const buttons=overlay.querySelectorAll('button');buttons.forEach(b=>b.disabled=true);
+    try{
+     const {error}=await client.rpc('pantry_knockout_referee_score',{p_code:code,p_event:eventId,p_match:match.id,p_expected_revision:decision.revision,p_expected_score_version:match.score_version,p_score1:scores[0],p_score2:scores[1]});
+     if(error)throw error;overlay.remove();await onSaved();
+    }catch(error){overlay.querySelector('[role=alert]').textContent=error.message;buttons.forEach(b=>b.disabled=false)}
+   };
+  }catch(error){alert(error.message)}finally{button.disabled=false}
+ });
 }
