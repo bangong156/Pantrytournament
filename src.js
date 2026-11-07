@@ -371,6 +371,13 @@ async function loadScoreboard(tid,token,matchId){
  if(epoch!==renderEpoch)return;
  if(error){await refereeWriteError(tid,token,error);return}
  if(!data)return refereeConsole(tid,token,null,true);
+ if(typeof data.can_control!=='boolean'){
+  const {data:ownership,error:ownershipError}=await supabase.rpc('referee_match_ownership',{p_session_token:token});
+  if(epoch!==renderEpoch)return;
+  if(ownershipError){await refereeWriteError(tid,token,ownershipError);return}
+  const controller=ownership?.find(row=>row.match_id===matchId);
+  if(controller)Object.assign(data,controller);
+ }
  renderScoreboard(tid,token,data);
 }
 function secondaryRefereeSession(tid,token){
