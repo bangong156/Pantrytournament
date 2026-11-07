@@ -358,10 +358,14 @@ async function refereeConsole(tid,token,validated=null,showList=false){
   if(match?.status!=='playing'&&(!raw||!/^[0-9]+$/.test(raw)||!Number.isInteger(target)||target<1||target>999)){
    document.querySelector(`[data-ref-target-error="${id}"]`).textContent='Đích điểm phải là số nguyên từ 1 đến 999.';input?.focus();return;
   }
+  const startEpoch=renderEpoch;
+  const openingServer=await chooseOpeningServer(match,tm,db.event.id);
+  if(!openingServer||startEpoch!==renderEpoch)return;
   b.disabled=true;b.textContent='ĐANG MỞ…';stopLive();
   const winTwo=document.querySelector(`[data-ref-win-two="${id}"]`)?.checked??(match?.status==='playing'?match.win_by_two:false);
   const {error}=await supabase.rpc('referee_live_start',{p_session_token:token,p_match_id:id,p_score_target:target,p_win_by_two:winTwo});
   if(error){await refereeWriteError(tid,token,{...error,message:await courtConflictMessage(supabase,id,error)});return refereeConsole(tid,token,null,true)}
+  try{sessionStorage.setItem('pantry_opening_server_'+id,JSON.stringify(openingServer))}catch{}
   return loadScoreboard(tid,token,id);
  });
  startLive(`ref:${tid}`,()=>refereeConsole(tid,token,null,showList));
@@ -380,6 +384,34 @@ async function loadScoreboard(tid,token,matchId){
  }
  renderScoreboard(tid,token,data);
 }
+async function chooseOpeningServer(match,teamNames,eventId){
+ const host=document.querySelector('#modal');
+ const teamIds=[match.team1_id,match.team2_id];
+ host.innerHTML=`<div class="overlay"><form class="modal" aria-label="Giao bóng trước"><div class="modalhead"><h2>Giao bóng trước</h2></div><p role="status">Đang tải danh sách VĐV…</p><label>Đội giao trước<select name="team" required disabled><option value="">Chọn đội</option>${teamIds.map(id=>`<option value="${esc(id)}">${esc(teamNames[id]||'')}</option>`).join('')}</select></label><label>Người giao bóng<select name="player" required disabled><option value="">Chọn VĐV</option></select></label><div class="actions"><button type="button" class="ghost">Hủy</button><button type="submit" disabled>Bắt đầu trận</button></div></form></div>`;
+ return new Promise(resolve=>{
+  const form=host.querySelector('form'),team=form.elements.team,player=form.elements.player;
+  const submit=form.querySelector('[type=submit]'),status=form.querySelector('[role=status]');
+  const close=value=>{host.innerHTML='';resolve(value)};
+  form.querySelector('[type=button]').onclick=()=>close(null);
+  form.onsubmit=e=>{
+   e.preventDefault();
+   if(team.value&&player.value)close({team:teamNames[team.value],player:player.selectedOptions[0].textContent});
+  };
+  supabase.rpc('public_event_roster',{p_event_id:eventId}).then(({data,error})=>{
+   if(!form.isConnected)return;
+   if(error){status.textContent='Không tải được danh sách VĐV. Hãy đóng và thử lại.';return}
+   const roster=new Map((data||[]).map(row=>[row.team_id,row.player_names||[]]));
+   team.disabled=false;status.textContent='';
+   team.onchange=()=>{
+    const names=roster.get(team.value)||[];
+    player.replaceChildren(new Option('Chọn VĐV',''),...names.map((name,i)=>new Option(name,String(i+1))));
+    player.disabled=!names.length;submit.disabled=true;
+    status.textContent=team.value&&!names.length?'Đội này chưa có tên VĐV.':'';
+   };
+   player.onchange=()=>{submit.disabled=!player.value};
+  });
+ });
+}
 function secondaryRefereeSession(tid,token){
  try{const saved=JSON.parse(localStorage.getItem(`pantry_ref_${tid}`));return saved?.session_token===token&&saved.is_secondary===true?saved:null}catch{return null}
 }
@@ -388,8 +420,10 @@ function renderScoreboard(tid,token,state,message='',pulseTeam=0){
  const secondarySession=secondaryRefereeSession(tid,token);
  if(secondarySession&&(state.can_control!==true||state.status!=='playing'))return refereeConsole(tid,token,null,true);
  stopLive();renderEpoch++;
+ let openingServer;
+ try{openingServer=JSON.parse(sessionStorage.getItem('pantry_opening_server_'+state.match_id))}catch{}
  const canControl=state.can_control===true,s1=+state.team1_score,s2=+state.team2_score,ready=canControl&&state.can_finish===true;
- app.innerHTML=`<main class="scorekeeper-shell"><header class="scorekeeper-header">${secondarySession?`<b>TRỌNG TÀI PHỤ · ${esc(secondarySession.referee_name)}</b>`:'<button class="ghost" id="scoreBack">← Danh sách</button>'}<div><b>${esc(state.match_code)}</b><small>${esc(state.tournament_name)} → ${esc(state.event_name)} · Bảng ${esc(state.group_name)}</small></div>${pantryLogoMarkup('pantry-logo-scorekeeper')}<span class="scorekeeper-live">● LIVE</span></header><div class="scorekeeper-content"><div id="refSecondary"></div><p>ĐANG ĐÁNH${canControl?' · BẠN ĐANG BẮT':''} · TT: ${esc(state.controller_name||'Chưa có trọng tài')}</p>${!state.is_claimed?'<button id="claimRefMatch">TIẾP TỤC CHẤM ĐIỂM</button>':''}<div class="scorekeeper-rules"><span>ĐÍCH ${state.score_target} ĐIỂM</span><span>${state.win_by_two?'THẮNG CÁCH 2':'THẮNG CÁCH 1'}</span></div><div class="scorekeeper-teams">${[1,2].map(n=>`<section class="scorekeeper-team"><div class="scorekeeper-team-name">${esc(n===1?state.team1_name:state.team2_name)}</div><div class="scorekeeper-score ${pulseTeam===n?'scorekeeper-score-pulse':''}" data-score="${n}">${n===1?s1:s2}</div><div class="scorekeeper-actions"><button class="scorekeeper-plus" data-score-team="${n}" data-score-delta="1" ${canControl?'':'disabled'} aria-label="Cộng một điểm cho ${esc(n===1?state.team1_name:state.team2_name)}">＋</button><button class="scorekeeper-minus" data-score-team="${n}" data-score-delta="-1" ${!canControl||n===1&&s1===0||n===2&&s2===0?'disabled':''} aria-label="Trừ một điểm cho ${esc(n===1?state.team1_name:state.team2_name)}">− <span>Hoàn tác</span></button></div></section>`).join('')}</div>${ready?'<button class="scorekeeper-finish" id="finishLive">🏁 KẾT THÚC TRẬN</button>':''}<div class="scorekeeper-feedback" id="scoreFeedback" role="status">${esc(message)}</div>${!canControl||ready?'':'<p class="scorekeeper-hint">Trận chỉ có thể kết thúc khi đạt đích điểm và đủ cách biệt.</p>'}</div><div id="modal"></div></main>`;
+ app.innerHTML=`<main class="scorekeeper-shell"><header class="scorekeeper-header">${secondarySession?`<b>TRỌNG TÀI PHỤ · ${esc(secondarySession.referee_name)}</b>`:'<button class="ghost" id="scoreBack">← Danh sách</button>'}<div><b>${esc(state.match_code)}</b><small>${esc(state.tournament_name)} → ${esc(state.event_name)} · Bảng ${esc(state.group_name)}</small></div>${pantryLogoMarkup('pantry-logo-scorekeeper')}<span class="scorekeeper-live">● LIVE</span></header><div class="scorekeeper-content"><div id="refSecondary"></div>${openingServer?`<p>Giao bóng trước · <b>${esc(openingServer.player)}</b> (${esc(openingServer.team)})</p>`:''}<p>ĐANG ĐÁNH${canControl?' · BẠN ĐANG BẮT':''} · TT: ${esc(state.controller_name||'Chưa có trọng tài')}</p>${!state.is_claimed?'<button id="claimRefMatch">TIẾP TỤC CHẤM ĐIỂM</button>':''}<div class="scorekeeper-rules"><span>ĐÍCH ${state.score_target} ĐIỂM</span><span>${state.win_by_two?'THẮNG CÁCH 2':'THẮNG CÁCH 1'}</span></div><div class="scorekeeper-teams">${[1,2].map(n=>`<section class="scorekeeper-team"><div class="scorekeeper-team-name">${esc(n===1?state.team1_name:state.team2_name)}</div><div class="scorekeeper-score ${pulseTeam===n?'scorekeeper-score-pulse':''}" data-score="${n}">${n===1?s1:s2}</div><div class="scorekeeper-actions"><button class="scorekeeper-plus" data-score-team="${n}" data-score-delta="1" ${canControl?'':'disabled'} aria-label="Cộng một điểm cho ${esc(n===1?state.team1_name:state.team2_name)}">＋</button><button class="scorekeeper-minus" data-score-team="${n}" data-score-delta="-1" ${!canControl||n===1&&s1===0||n===2&&s2===0?'disabled':''} aria-label="Trừ một điểm cho ${esc(n===1?state.team1_name:state.team2_name)}">− <span>Hoàn tác</span></button></div></section>`).join('')}</div>${ready?'<button class="scorekeeper-finish" id="finishLive">🏁 KẾT THÚC TRẬN</button>':''}<div class="scorekeeper-feedback" id="scoreFeedback" role="status">${esc(message)}</div>${!canControl||ready?'':'<p class="scorekeeper-hint">Trận chỉ có thể kết thúc khi đạt đích điểm và đủ cách biệt.</p>'}</div><div id="modal"></div></main>`;
  mountPrimarySecondaryControls(tid,token,state.group_id,renderEpoch);
  if(!secondarySession)document.querySelector('#scoreBack').onclick=()=>refereeConsole(tid,token,null,true);
  document.querySelector('#claimRefMatch')?.addEventListener('click',async()=>{
