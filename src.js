@@ -1,7 +1,7 @@
 import { secondaryRefereeControls, bindSecondaryRefereeControls, secondaryRefereeLoginMarkup, bindSecondaryRefereeLogin } from './secondary-referee.js'
 import { mountOperations, readinessBadge } from './operations.js'
 import { ORGANIZER_EXPIRED, organizerFetch, organizerValid, organizerManages } from './organizer-access.js'
-import { renderManagedKnockout, publicBracket } from './knockout-ui.js'
+import { renderManagedKnockout, publicBracket, bindPublicKnockoutReferee } from './knockout-ui.js'
 import { courtLabel, courtOptions, assignCourt, courtConflictMessage } from './match-courts.js'
 import { validMatches, nextMatch, matchStatus, summaryText, eventState } from './spectator.js'
 import { linkedTournament, shareTournament, publicRoute, competitionURL, matchURL, teamURL, shareMatch, shareTeam } from './public-links.js'
@@ -224,6 +224,7 @@ async function openPublicLink(search){
  return route.info?publicTournamentInfo(route.tournament):publicTournament(route.tournament,'overview',route.event);
 }
 function bindPublicMatchActions(tid,eventId,title){
+ bindPublicKnockoutReferee(supabase,eventId,()=>publicTournament(tid,'knockout',eventId));
  document.querySelectorAll('[data-open-match]').forEach(button=>button.onclick=()=>publicTournament(tid,'matches',eventId,{match:button.dataset.openMatch}));
  document.querySelectorAll('[data-share-match],[data-share-team]').forEach(button=>button.onclick=async()=>{
   const feedback=button.closest('article')?.querySelector('[data-share-feedback]')||document.querySelector('[data-share-feedback]');
