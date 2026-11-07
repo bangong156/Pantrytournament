@@ -46,6 +46,12 @@ export function publicBracket(matches,teamNames,{admin=false}={}){
     const feeders=sources(m).filter(source=>positions.has(source));
     if(feeders.length)positions.set(m,Math.round(feeders.reduce((sum,source)=>sum+positions.get(source),0)/feeders.length));
   }
+  const playoffs=rounds.find(round=>round.stage==='playoff')?.matches||[];
+  if(playoffs.length===3&&rows===4){
+    const ordered=[...playoffs].sort((a,b)=>b.match_code.localeCompare(a.match_code,undefined,{numeric:true}));
+    const slots=playoffs.map(match=>positions.get(match)).sort((a,b)=>a-b);
+    ordered.forEach((match,index)=>positions.set(match,slots[index]));
+  }
   const card=m=>{
     const codeTag=admin||!m.id?'b':'button';
     const hasScore=m.team1_score!=null||m.team2_score!=null;
@@ -65,6 +71,10 @@ export function publicBracket(matches,teamNames,{admin=false}={}){
 function knockoutPoster(matches,teamNames,eventName){
  const rounds=knockoutStages.map(stage=>({stage,matches:matches.filter(m=>m.stage===stage).sort((a,b)=>(a.scheduled_order??0)-(b.scheduled_order??0))})).filter(r=>r.matches.length);
  if(!rounds.length)throw Error('Chưa có nhánh Knockout để xuất ảnh.');
+ const playoffs=rounds.find(round=>round.stage==='playoff');
+ if(playoffs?.matches.length===3&&rounds.some(round=>round.stage==='quarterfinal'&&round.matches.length===4)){
+  playoffs.matches.sort((a,b)=>b.match_code.localeCompare(a.match_code,undefined,{numeric:true}));
+ }
  const cardW=370,cardH=142,colGap=105,top=260,bottom=100,left=75,spacing=26;
  const firstCount=Math.max(...rounds.map(r=>r.matches.length));
  const rowStep=cardH+spacing;
