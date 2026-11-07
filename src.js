@@ -360,9 +360,9 @@ async function refereeConsole(tid,token,validated=null,showList=false){
   }
   b.disabled=true;b.textContent='ĐANG MỞ…';stopLive();
   const winTwo=document.querySelector(`[data-ref-win-two="${id}"]`)?.checked??(match?.status==='playing'?match.win_by_two:false);
-  const {data,error}=await supabase.rpc('referee_live_start',{p_session_token:token,p_match_id:id,p_score_target:target,p_win_by_two:winTwo});
+  const {error}=await supabase.rpc('referee_live_start',{p_session_token:token,p_match_id:id,p_score_target:target,p_win_by_two:winTwo});
   if(error){await refereeWriteError(tid,token,{...error,message:await courtConflictMessage(supabase,id,error)});return refereeConsole(tid,token,null,true)}
-  renderScoreboard(tid,token,data);
+  return loadScoreboard(tid,token,id);
  });
  startLive(`ref:${tid}`,()=>refereeConsole(tid,token,null,showList));
 }
@@ -404,6 +404,7 @@ function renderScoreboard(tid,token,state,message='',pulseTeam=0){
   document.querySelector('#scoreFeedback').textContent='Đang lưu điểm…';stopLive();
   const {data,error}=await supabase.rpc('referee_live_adjust',{p_session_token:token,p_match_id:state.match_id,p_team:+b.dataset.scoreTeam,p_delta:+b.dataset.scoreDelta,p_expected_version:state.version,p_expected_team1_score:s1,p_expected_team2_score:s2,p_action_id:crypto.randomUUID()});
   if(error){if(await refereeWriteError(tid,token,error))return loadScoreboard(tid,token,state.match_id);return}
+  if(!data||typeof data.can_control!=='boolean')return loadScoreboard(tid,token,state.match_id);
   if(!data.stale&&data[`team${b.dataset.scoreTeam}_score`]!==state[`team${b.dataset.scoreTeam}_score`]&&navigator.vibrate)navigator.vibrate(10);
   renderScoreboard(tid,token,data,data.stale?'Điểm đã đổi trên thiết bị khác. Kiểm tra rồi bấm lại.':'Đã lưu điểm',data.stale?0:+b.dataset.scoreTeam);
  });
