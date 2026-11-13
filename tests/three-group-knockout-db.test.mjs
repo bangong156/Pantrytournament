@@ -15,6 +15,7 @@ before(async()=>{
  const original=await readFile(new URL('../supabase/migrations/20260927082138_pantry_knockout_engine.sql',import.meta.url),'utf8');
  await db.exec(original.slice(original.indexOf('create function pantry_knockout.inputs('),original.indexOf('create function pantry_knockout.read_inputs(')));
  await db.exec(await readFile(new URL('../supabase/migrations/20261113042715_three_group_knockout.sql',import.meta.url),'utf8'));
+ await db.exec(await readFile(new URL('../supabase/migrations/20261113081416_two_team_head_to_head.sql',import.meta.url),'utf8'));
 });
 after(async()=>{await db?.close()});
 async function scope(event){await sql("select set_config('test.event',$1,false)",[event])}
@@ -45,4 +46,19 @@ test('SQL accepts three-group qualification and rejects a substituted third',asy
   wildcard.team_id=f.standings[0].rows[2].id;
   await assert.rejects(()=>sql('select pantry_knockout.validate_snapshot($1,$2)',[f.event,JSON.stringify(q.snapshot)]),/Incorrect qualified/);
  }
+});
+
+test('SQL accepts head-to-head winner with worse difference and rejects reversed qualification',async()=>{
+ const f=await fixture(3),g=f.standings[0],ids=[...g.rows.map(r=>r.id),randomUUID()];
+ await sql('insert into teams values ($1,$2,$3)',[ids[3],f.event,'D']);
+ await sql('insert into group_teams(event_id,group_id,team_id,position) values ($1,$2,$3,4)',[f.event,g.group.id,ids[3]]);
+ await sql('delete from matches where group_id=$1',[g.group.id]);
+ for(const [a,b,s1,s2] of [[0,1,11,10],[0,2,0,11],[0,3,11,10],[1,2,11,0],[1,3,11,0],[2,3,0,11]]){
+  await sql("insert into matches(event_id,tournament_id,group_id,match_code,stage,team1_id,team2_id,team1_score,team2_score,winner_id,status) values ($1,$2,$3,$4,'group',$5,$6,$7,$8,$9,'completed')",[f.event,tournament,g.group.id,`${a}-${b}`,ids[a],ids[b],s1,s2,s1>s2?ids[a]:ids[b]]);
+ }
+ g.rows=[{id:ids[0],w:2,pf:22,diff:-9},{id:ids[1],w:2,pf:32,diff:21},{id:ids[3],w:1,pf:21,diff:-1},{id:ids[2],w:1,pf:11,diff:-11}];
+ const q=qualify(f.standings);q.snapshot.input_state=(await one('select pantry_knockout.inputs($1) inputs',[f.event])).inputs;
+ assert.equal((await one('select pantry_knockout.validate_snapshot($1,$2) n',[f.event,JSON.stringify(q.snapshot)])).n,3);
+ const rows=q.snapshot.standings[0].rows;[rows[0],rows[1]]=[rows[1],rows[0]];rows.forEach((r,i)=>r.group_position=i+1);
+ await assert.rejects(()=>sql('select pantry_knockout.validate_snapshot($1,$2)',[f.event,JSON.stringify(q.snapshot)]),/head-to-head first/);
 });
