@@ -480,7 +480,13 @@ async function dashboard(){
  let query=supabase.from('tournaments').select('*').order('start_date',{ascending:false});
  if(isOrganizer()){const ids=[...new Set([...organizerState.owned_ids,...organizerState.assigned_ids])];query=query.in('id',ids.length?ids:['00000000-0000-0000-0000-000000000000'])}
  const {data:t,error:dashboardError}=await query;if(epoch!==renderEpoch)return;
- if(dashboardError&&isOrganizer())return organizerBlocked(dashboardError.message);
+ if(dashboardError){
+  if(isOrganizer())return organizerBlocked(dashboardError.message);
+  app.innerHTML=`<main class="wrap"><h1>Không tải được danh sách giải</h1><p>Chưa thể kết nối hoặc phiên đăng nhập cần được làm mới. Vui lòng thử lại; thông báo này không có nghĩa là các giải đã bị xóa.</p><p role="alert">${esc(dashboardError.message)}</p><button id="dashboardRetry">Thử tải lại</button> <button class="ghost" id="dashboardRelogin">Đăng nhập lại</button></main>`;
+  document.querySelector('#dashboardRetry').onclick=dashboard;
+  document.querySelector('#dashboardRelogin').onclick=async()=>{await supabase.auth.signOut({scope:'local'});session=null;profile=null;login()};
+  return;
+ }
  const isAdmin=String(profile?.role||'').toLowerCase()==='admin';
  app.innerHTML=`<header class="dashboard-header"><div class="pantry-header-brand">${pantryLogoMarkup('pantry-logo-dashboard')}<span>Tournament Manager</span></div><div class="dashboard-account">${esc(profile?.full_name)} · ${esc(profile?.role)} <button class="ghost" id="logout">Đăng xuất</button></div></header><main class="wrap"><div class="hero"><div><small>CONTROL CENTER</small><h1>${isOrganizer()?'GIẢI CỦA TÔI':'Giải đấu & Minigame'}</h1>${isOrganizer()?`<p>Quyền vận hành đến: ${esc(new Date(organizerState.account.expires_at).toLocaleString('vi-VN'))}</p>`:''}<p>Tạo giải, import VĐV, chia bảng và nhập kết quả tại một nơi.</p></div>${!isOrganizer()||organizerState.account.can_create_tournaments?'<button id="new" aria-haspopup="dialog">＋ Tạo</button>':''}</div><div id="dashboardMsg" class="dashboard-message" role="status"></div><div class="cards" id="tournamentCards">${(t||[]).map(x=>`<article class="card tournament-card" data-id="${x.id}"><div class="pill">${x.event_type==='minigame'?'MINIGAME':'GIẢI ĐẤU'}</div><h3>${esc(x.name)}</h3>${isOrganizer()?`<small>${x.owner_user_id===session.user.id?'TỰ TẠO':'ĐƯỢC CHỈ ĐỊNH'}</small>`:''}<p>${x.format==='mlp'?'Đồng đội / MLP':'Đánh đôi'} · ${esc(x.start_date)}</p><strong>${esc(x.status)}</strong>${isAdmin?`<button class="tournament-delete" data-delete-tournament="${x.id}" aria-label="Xóa giải ${esc(x.name)}">Xóa giải</button>`:''}</article>`).join('')||'<div class="empty">Chưa có giải nào. Tạo giải đầu tiên để bắt đầu.</div>'}</div></main><div id="modal"></div>`;
  document.querySelector('#logout').onclick=async()=>{await supabase.auth.signOut();session=null;profile=null;organizerState=null;clearInterval(organizerTimer);render()};
