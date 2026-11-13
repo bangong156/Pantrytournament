@@ -5,6 +5,18 @@ import {matchStatus} from './spectator.js';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 // Layout only: source references determine visual positions; persisted matches
 // and their order/participants are never changed by the bracket renderer.
+export function threeGroupPreview(){
+  const labels={},nodes=[];
+  const pairs=[['Nhất A','Hạng 3 · suất 1'],['Nhất B','Nhì C'],['Nhất C','Hạng 3 · suất 2'],['Nhì A','Nhì B']];
+  pairs.forEach((pair,i)=>{
+    const ids=pair.map((label,j)=>{const id=`preview3-${i}-${j}`;labels[id]=label;return id});
+    nodes.push({match_code:`QF-${i+1}`,stage:'quarterfinal',scheduled_order:i+1,team1_id:ids[0],team2_id:ids[1]});
+  });
+  for(let i=0;i<2;i++)nodes.push({match_code:`SF-${i+1}`,stage:'semifinal',scheduled_order:5+i,team1_source_code:`QF-${2*i+1}`,team2_source_code:`QF-${2*i+2}`});
+  nodes.push({match_code:'F-1',stage:'final',scheduled_order:7,team1_source_code:'SF-1',team2_source_code:'SF-2'});
+  return `<section class="panel"><h2>XEM TRƯỚC NHÁNH 3 BẢNG</h2><p>Nhất, Nhì mỗi bảng + 2 đội hạng 3 có hiệu số cao nhất vào Tứ kết. Nếu bằng hiệu số, xét tổng điểm ghi được; bằng cả hai thì Admin bốc thăm.</p><p>Hai suất hạng 3 được ghép tránh gặp Nhất cùng bảng. Đây là sơ đồ theo thứ hạng; chưa cần hoàn tất vòng bảng.</p>${publicBracket(nodes,labels)}</section>`;
+}
+
 function fiveGroupPreview(groups){
   const pantryGroup=groups.find(group=>group.id==='edd73fb4-9e56-4885-856a-63453b146df0');
   const exampleGroup=pantryGroup||groups.at(-1);
@@ -192,6 +204,7 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
     const groupInput=await rpc('pantry_knockout_inputs');
     const planGroups=(groupInput.groups||[]).slice().sort((a,b)=>a.group_order-b.group_order);
     if(!isCurrent())return;
+    if(planGroups.length===3)controls.insertAdjacentHTML('beforebegin',threeGroupPreview());
     if(planGroups.length===5)controls.insertAdjacentHTML('beforebegin',fiveGroupPreview(planGroups));
     let knockoutPreplan=null;
     if(planGroups.length===4){

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {qualify,buildBracket,compareWildcard,knockoutRPC,sourceLabel} from '../knockout-engine.js';
-import {publicBracket} from '../knockout-ui.js';
+import {publicBracket,threeGroupPreview} from '../knockout-ui.js';
 import {teamJourney} from '../spectator-detail.js';
 const standings=n=>Array.from({length:n},(_,i)=>({group:{id:`g${i}`,name:String.fromCharCode(65+i)},rows:Array.from({length:3},(_,j)=>({id:`${String.fromCharCode(65+i)}${j+1}`,name:`Team ${i}-${j}`,w:3-j,pf:50-i-j,diff:20-i-j}))}));
 const nodes=n=>buildBracket(qualify(standings(n)));
@@ -70,4 +70,35 @@ test('5-group routing protects against every possible wildcard origin',()=>{
    for(const id of [p.team1_id,p.team2_id])assert.notEqual(id[0],direct[0]);
   }
  }
+});
+
+test('3 groups: eight QF entrants and fixed routing for every third-place combination',()=>{
+ for(const omitted of [0,1,2]){
+  const st=standings(3);st[omitted].rows[2].diff=-999;
+  const result=qualify(st),b=buildBracket(result);
+  assert.equal(result.qualifiers.length,8);
+  assert.ok(result.qualifiers.every(q=>q.entry_stage==='quarterfinal'));
+  assert.equal(b.length,7);
+  assert.deepEqual(b.slice(0,4).map(m=>m.team1_id),['A1','B1','C1','A2']);
+  assert.equal(b[1].team2_id,'C2');assert.equal(b[3].team2_id,'B2');
+  const thirds=[b[0].team2_id,b[2].team2_id];
+  assert.deepEqual([...thirds].sort(),st.filter((_,i)=>i!==omitted).map(g=>g.rows[2].id).sort());
+  for(const m of b.slice(0,4))assert.notEqual(m.team1_id[0],m.team2_id[0]);
+  assert.deepEqual(b,buildBracket({...result,qualifiers:[...result.qualifiers].reverse(),snapshot:{...result.snapshot,standings:[...result.snapshot.standings].reverse()}}));
+  assert.deepEqual(b.slice(4,6).map(m=>[m.team1_source_code,m.team2_source_code]),[['QF-1','QF-2'],['QF-3','QF-4']]);
+ }
+});
+test('3-group third-place cutoff uses points then a full persisted draw',()=>{
+ const st=standings(3);st.forEach(g=>{g.rows[2].diff=-10;g.rows[2].pf=20});
+ st[0].rows[2].pf=21;
+ const tied=qualify(st);assert.equal(tied.unresolved.length,1);assert.throws(()=>buildBracket(tied));
+ const q=qualify(st,[{group_position:3,point_difference:-10,points_scored:20,ordered_team_ids:['C3','B3'],method:'admin_draw'}]);
+ assert.deepEqual(q.qualifiers.filter(q=>q.group_position===3).map(q=>q.team_id),['A3','C3']);
+ assert.equal(buildBracket(q).length,7);
+});
+
+test('three-group symbolic preview includes all rounds before any scores exist',()=>{
+ const html=threeGroupPreview();
+ for(const label of ['Nhất A','Nhất B','Nhất C','Nhì A','Nhì B','Nhì C','Hạng 3 · suất 1','Hạng 3 · suất 2','Thắng QF-1','Thắng SF-2'])assert.ok(html.includes(label),label);
+ assert.equal((html.match(/class="knockout-card"/g)||[]).length,7);
 });

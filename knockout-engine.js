@@ -6,13 +6,13 @@ const key=q=>String(q.team_id);
 const sameSet=(a,b)=>a.length===b.length&&new Set(a).size===a.length&&[...a].sort().join(',')===[...b].sort().join(',');
 export function qualify(standings,draws=[]){
   const n=standings.length;
-  if(n<4||n>8)throw new Error('Knockout hỗ trợ 4–8 bảng.');
+  if(n<3||n>8)throw new Error('Knockout hỗ trợ 3–8 bảng.');
   const normalized=standings.map(({group,rows})=>({group_id:group.id,rows:rows.map((r,i)=>({team_id:r.id,group_position:i+1,wins:r.w,point_difference:r.diff,points_scored:r.pf}))}));
-  const candidates=standings.flatMap(({group,rows})=>rows.slice(0,3).map((r,i)=>({team_id:r.id,group_id:group.id,group_name:group.name,name:r.name,group_position:i+1,point_difference:r.diff,points_scored:r.pf,qualification_type:['group_winner','runner_up','wildcard_third'][i],entry_stage:n===4?'quarterfinal':n===5?(i===0?'quarterfinal':'playoff'):'round_of_16'})));
+  const candidates=standings.flatMap(({group,rows})=>rows.slice(0,3).map((r,i)=>({team_id:r.id,group_id:group.id,group_name:group.name,name:r.name,group_position:i+1,point_difference:r.diff,points_scored:r.pf,qualification_type:['group_winner','runner_up','wildcard_third'][i],entry_stage:n<=4?'quarterfinal':n===5?(i===0?'quarterfinal':'playoff'):'round_of_16'})));
   if(standings.some(s=>s.rows.length<2)||new Set(candidates.map(key)).size!==candidates.length)throw new Error('Mỗi bảng cần ít nhất 2 đội và không được trùng đội.');
-  const pantryWildcardGroup=standings.find(({group})=>group.id==='edd73fb4-9e56-4885-856a-63453b146df0')?.group.id;
+  const pantryWildcardGroup=n===5&&standings.find(({group})=>group.id==='edd73fb4-9e56-4885-856a-63453b146df0')?.group.id;
   const thirds=candidates.filter(q=>q.group_position===3&&(!pantryWildcardGroup||q.group_id===pantryWildcardGroup)).sort((a,b)=>compareWildcard(a,b)||key(a).localeCompare(key(b)));
-  const count=({4:0,5:1,6:4,7:2,8:0})[n];
+  const count=({3:2,4:0,5:1,6:4,7:2,8:0})[n];
   if(thirds.length<count)throw new Error('Không đủ đội hạng 3 cho thể thức này.');
   const unresolved=[],usedDraws=[];
   for(let i=0;i<thirds.length;){
@@ -62,6 +62,15 @@ export function buildBracket(result,preplan=null){
   let next;
   if(n===8){const get=(g,p)=>entrant(q.find(x=>x.group_id===result.snapshot.standings[g].group_id&&x.group_position===p));next=round('round_of_16','R16',[[0,1,1,2],[2,1,3,2],[4,1,5,2],[6,1,7,2],[7,1,6,2],[5,1,4,2],[3,1,2,2],[1,1,0,2]].flatMap(([a,p,b,r])=>[get(a,p),get(b,r)]));}
   else if(n>=6)next=round('round_of_16','R16',assign16(q));
+  else if(n===3){
+    // Group names keep A/B/C routing fixed even when the preview is redrawn.
+    const groups=[...new Map(q.map(x=>[x.group_id,x.group_name])).entries()].sort((a,b)=>a[1].localeCompare(b[1]));
+    const [a,b,c]=groups.map(([id])=>id);
+    const get=(id,p)=>entrant(q.find(x=>x.group_id===id&&x.group_position===p));
+    const thirds=q.filter(x=>x.group_position===3).sort(compareWildcard);
+    if(thirds[0].group_id===a||thirds[1].group_id===c)thirds.reverse();
+    next=[get(a,1),entrant(thirds[0]),get(b,1),get(c,2),get(c,1),entrant(thirds[1]),get(a,2),get(b,2)];
+  }
   else if(n===4){const get=(gid,p)=>entrant(q.find(x=>x.group_id===gid&&x.group_position===p));const ids=result.snapshot.standings.map(x=>x.group_id);const pairs=Array.isArray(preplan)&&preplan.length===2&&new Set(preplan.flat()).size===4&&preplan.flat().every(id=>ids.includes(id))?preplan:[[ids[0],ids[2]],[ids[1],ids[3]]];next=pairs.flatMap(([a,b])=>[get(a,1),get(b,2),get(b,1),get(a,2)]);}
   else {
     const winners=q.filter(x=>x.group_position===1).map(entrant),others=q.filter(x=>x.group_position!==1).map(entrant);
