@@ -523,3 +523,6 @@ body:has(#app > .public-home-header) #homepageGuide{position:sticky;top:14px}
 .public-score-entry-notice>span{min-width:0;flex:1}
 .public-score-entry-notice button{flex:0 0 auto;background:#30452a;color:white;font-weight:800;white-space:normal;min-height:44px}
 @media(max-width:767px){.public-score-entry-notice{flex-direction:column;align-items:stretch;padding:12px;gap:10px}.public-score-entry-notice button{width:100%;max-width:100%}}
+
+.scorekeeper-timeout {width:100%;margin-top:14px;min-height:48px;background:#a96619;color:#fff;font-weight:800;font-size:clamp(13px,2vw,19px);border-radius:12px;}
+.scorekeeper-timeout:disabled {background:#e5e5df;color:#686b61;cursor:default;opacity:1;}
