@@ -1,3 +1,4 @@
+import { normalizeUsername, usernameEmail } from '../../account-login.js';
 import {createClient} from '@supabase/supabase-js';
 
 // Same server-only Supabase credentials and bearer-token authentication as LIVE.
@@ -27,13 +28,15 @@ export async function handler(event){
       const {error}=await server.auth.admin.updateUserById(account.user_id,{ban_duration:'none'});
       return error?reply(503,{error:error.message}):reply(200,{user_id:account.user_id});
     }
-    const name=String(body.display_name||'').trim(),email=String(body.email||'').trim();
+    const name=String(body.display_name||'').trim();
+    let username,email;
+    try{username=normalizeUsername(body.username);email=usernameEmail(username)}catch(error){return reply(400,{error:error.message})}
     const expires=new Date(body.expires_at);
-    if(!name||name.length>160||!/^\S+@\S+\.\S+$/.test(email)||typeof body.password!=='string'||body.password.length<8||body.password.length>256||!Number.isFinite(expires.getTime())||expires<=new Date()||typeof body.can_create_tournaments!=='boolean'){
-      return reply(400,{error:'Nhập tên, email hợp lệ, mật khẩu từ 8 ký tự và ngày giờ hết hạn trong tương lai.'});
+    if(!name||name.length>160||typeof body.password!=='string'||body.password.length<8||body.password.length>256||!Number.isFinite(expires.getTime())||expires<=new Date()||typeof body.can_create_tournaments!=='boolean'){
+      return reply(400,{error:'Nhập tên, tên đăng nhập hợp lệ, mật khẩu từ 8 ký tự và ngày giờ hết hạn trong tương lai.'});
     }
-    const {data,error}=await server.auth.admin.createUser({email,password:body.password,email_confirm:true,ban_duration:'876000h',user_metadata:{full_name:name}});
-    if(error)return reply(400,{error:error.message});
+    const {data,error}=await server.auth.admin.createUser({email,password:body.password,email_confirm:true,ban_duration:'876000h',user_metadata:{full_name:name,username}});
+    if(error)return reply(400,{error:/already|registered|exists/i.test(error.message)?'Tên đăng nhập đã tồn tại. Vui lòng chọn tên khác.':error.message});
     const userId=data.user.id;
     const {error:registerError}=await caller.rpc('admin_register_organizer',{p_user:userId,p_name:name,p_expires:expires.toISOString(),p_can_create:body.can_create_tournaments});
     if(registerError){
@@ -42,6 +45,6 @@ export async function handler(event){
       return reply(503,{error:registerError.message+(cleanupError?' Tài khoản đăng nhập đang khóa chưa được dọn; liên hệ Pantry Admin.':'')});
     }
     const {error:activateError}=await server.auth.admin.updateUserById(userId,{ban_duration:'none'});
-    return reply(201,{user_id:userId,email,warning:activateError?'Account đã tạo nhưng đăng nhập còn khóa. Mở QUẢN LÝ QUYỀN và lưu lại để kích hoạt đăng nhập.':null});
+    return reply(201,{user_id:userId,username,warning:activateError?'Account đã tạo nhưng đăng nhập còn khóa. Mở QUẢN LÝ QUYỀN và lưu lại để kích hoạt đăng nhập.':null});
   }catch{return reply(503,{error:'Không thể kết nối dịch vụ tài khoản khách. Vui lòng thử lại.'});}
 }
