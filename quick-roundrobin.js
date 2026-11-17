@@ -67,7 +67,7 @@ $('joinRoom').onclick=async()=>{
 showRoom();
 if(roomCode)loadRoom().catch(e=>roomError('Không vào được phòng: '+e.message));
 setInterval(async()=>{
- if(!roomCode||saving||blocked||document.activeElement?.matches('input[type=number],textarea'))return;
+ if(!roomCode||saving||blocked||document.activeElement?.matches('input,textarea,select'))return;
  try{
   const {data,error}=await db.rpc('quick_rr_read',{p_code:roomCode});if(error)throw error;
   if(!data)throw Error('Phòng không tồn tại.');
@@ -149,26 +149,70 @@ function schedule(names){
  }
  return rounds.flatMap((round,i)=>round.map(game=>({id:'m'+(i)+'-'+game.a.join('-')+'-'+game.b.join('-'),round:i+1,a:game.a,b:game.b,sa:'',sb:''})));
 }
+function fixedRow(team={}){
+ const row=document.createElement('div');row.className='toolbar';
+ row.innerHTML='<input data-team-name placeholder="Tên đội (không bắt buộc)" aria-label="Tên đội" value="'+esc(team.customName||'')+'"><input data-player-one placeholder="Tên VĐV 1" aria-label="Tên VĐV 1" value="'+esc(team.players?.[0]||'')+'"><input data-player-two placeholder="Tên VĐV 2" aria-label="Tên VĐV 2" value="'+esc(team.players?.[1]||'')+'"><button type="button" class="danger">Xóa đội</button>';
+ row.querySelector('button').onclick=()=>row.remove();$('fixedTeams').append(row);
+}
+function readFixedTeams(){
+ const teams=[...$('fixedTeams').children].map(row=>{
+  const customName=row.querySelector('[data-team-name]').value.trim();
+  const players=[row.querySelector('[data-player-one]').value.trim(),row.querySelector('[data-player-two]').value.trim()];
+  if(players.some(x=>!x))throw Error('Mỗi đội phải nhập đủ tên 2 VĐV.');
+  return {customName,players,name:customName||players.join(' - ')};
+ });
+ if(teams.length<2||teams.length>32)throw Error('Fixpair cần từ 2 đến 32 đội.');
+ if(new Set(teams.map(t=>t.name.toLocaleLowerCase('vi'))).size!==teams.length)throw Error('Tên đội bị trùng. Hãy đặt tên đội để phân biệt.');
+ return teams;
+}
+function scheduleFixed(teams){
+ let ring=shuffle(teams.map((_,i)=>i));if(ring.length%2)ring.push(null);
+ const matches=[];
+ for(let round=1;round<ring.length;round++){
+  for(let i=0;i<ring.length/2;i++){
+   const a=ring[i],b=ring[ring.length-1-i];
+   if(a!==null&&b!==null)matches.push({id:'f'+matches.length,round,a:[a],b:[b],sa:'',sb:''});
+  }
+  ring=[ring[0],ring.at(-1),...ring.slice(1,-1)];
+ }
+ return matches;
+}
+function renderMode(){
+ const fixed=$('rrMode').value==='fixpair';
+ $('fixedSetup').hidden=!fixed;$('regularSetup').hidden=fixed;
+ $('rrIntro').textContent=fixed?'Đội cố định 2 VĐV · Thi đấu vòng tròn · BXH đội tự cập nhật':'Nhập từng người · Mỗi trận đổi partner · BXH cá nhân tự cập nhật';
+ $('setupHelp').textContent=fixed?'Từ 2 đến 32 đội. Mỗi đội gặp tất cả đội khác một lần. Có thể thêm đội rồi xếp lịch lại; lịch và kết quả cũ chỉ được thay sau khi xác nhận.':'Từ 4 đến 64 người, số lẻ vẫn chơi được. Có thể thêm người, xếp lại lịch hoặc xóa từng trận. Xếp lại lịch sẽ thay thế lịch cũ sau khi xác nhận.';
+ $('generate').textContent=fixed?'🎲 Xếp lịch Fixpair':'🎲 Xếp lịch xoay partner';
+}
+$('rrMode').onchange=renderMode;
+$('addFixedTeam').onclick=()=>fixedRow();
 function generate(reshuffle=false){
  $('error').textContent='';
  try{
-  const names=reshuffle?state.names:parseNames($('names').value);
+  const mode=reshuffle?(state.mode||'regular'):$('rrMode').value;
+  const teams=mode==='fixpair'?(reshuffle?state.teams:readFixedTeams()):undefined;
+  const names=mode==='fixpair'?teams.map(t=>t.name):(reshuffle?state.names:parseNames($('names').value));
   if(state.matches.length&&!confirm(state.matches.some(m=>m.sa!==''||m.sb!=='')?'Xếp lại lịch sẽ XÓA các trận cũ và toàn bộ tỉ số đã nhập. Tiếp tục?':'Xếp lại lịch sẽ thay thế toàn bộ trận đã xếp. Tiếp tục?'))return;
-  state={names,matches:schedule(names)};save();render();
+  state={mode,names,...(teams?{teams}:{}),matches:mode==='fixpair'?scheduleFixed(teams):schedule(names)};save();render();
  }catch(e){$('error').textContent=e.message}
 }
 function render(){
- $('names').value=state.names.join('\n');
+ $('rrMode').value=state.mode||'regular';renderMode();
+ $('fixedTeams').innerHTML='';
+ if(state.mode==='fixpair')state.teams.forEach(fixedRow);else{fixedRow();fixedRow()}
+ $('rankingName').textContent=state.mode==='fixpair'?'Đội':'VĐV';
+ $('rankingHelp').textContent=state.mode==='fixpair'?'BXH đội: số trận thắng → hiệu số điểm → tổng điểm ghi được.':'BXH cá nhân: số trận thắng → hiệu số điểm → tổng điểm ghi được. Điểm mỗi trận được tính cho cả hai người cùng đội.';
+ $('names').value=state.mode==='fixpair'?'':state.names.join('\n');
  const exists=state.names.length>0;
  ['teamsPanel','matchesPanel','rankingPanel'].forEach(id=>$(id).hidden=!exists);
  $('reshuffle').hidden=!exists;
  $('clearMatches').hidden=!exists||state.matches.length===0;
  if(!exists)return;
- $('teamsPanel').querySelector('h2').textContent='2. VĐV tham gia';
- $('teams').innerHTML=state.names.map((name,i)=>'<div class="team"><b>VĐV '+(i+1)+'</b>'+esc(name)+'</div>').join('');
+ $('teamsPanel').querySelector('h2').textContent=state.mode==='fixpair'?'2. Các đội tham gia':'2. VĐV tham gia';
+ $('teams').innerHTML=state.names.map((name,i)=>'<div class="team"><b>'+(state.mode==='fixpair'?'Đội ':'VĐV ')+(i+1)+'</b>'+esc(name)+(state.mode==='fixpair'?'<small style="display:block">'+state.teams[i].players.map(esc).join(' + ')+'</small>':'')+'</div>').join('');
  const done=state.matches.filter(m=>m.sa!==''&&m.sb!==''&&m.sa!==m.sb).length;
- $('progress').textContent=done+' / '+state.matches.length+' trận có kết quả · '+(state.matches.length?Math.max(...state.matches.map(m=>m.round)):0)+' lượt đấu · Ghép partner không trùng.';
- $('matches').innerHTML=Array.from({length:Math.max(...state.matches.map(m=>m.round))},(_,i)=>i+1).map(r=>'<div class="round">LƯỢT '+r+'</div>'+state.matches.filter(m=>m.round===r).map(m=>'<div class="match"><div>'+m.a.map(id=>esc(state.names[id])).join(' + ')+'</div><input type="number" min="0" max="999" step="1" aria-label="Điểm đội A" data-match="'+m.id+'" data-side="sa" value="'+esc(m.sa)+'"><span class="vs">:</span><input type="number" min="0" max="999" step="1" aria-label="Điểm đội B" data-match="'+m.id+'" data-side="sb" value="'+esc(m.sb)+'"><div class="right">'+m.b.map(id=>esc(state.names[id])).join(' + ')+'</div><button type="button" class="danger match-delete" data-delete-match="'+esc(m.id)+'">Xóa trận</button></div>').join('')).join('');
+ $('progress').textContent=done+' / '+state.matches.length+' trận có kết quả · '+(state.matches.length?Math.max(...state.matches.map(m=>m.round)):0)+' lượt đấu · '+(state.mode==='fixpair'?'Đội cố định, mỗi cặp đội gặp nhau một lần.':'Ghép partner không trùng.');
+ $('matches').innerHTML=Array.from({length:Math.max(0,...state.matches.map(m=>m.round))},(_,i)=>i+1).map(r=>'<div class="round">LƯỢT '+r+'</div>'+state.matches.filter(m=>m.round===r).map(m=>'<div class="match"><div>'+m.a.map(id=>esc(state.names[id])).join(' + ')+'</div><input type="number" min="0" max="999" step="1" aria-label="Điểm đội A" data-match="'+m.id+'" data-side="sa" value="'+esc(m.sa)+'"><span class="vs">:</span><input type="number" min="0" max="999" step="1" aria-label="Điểm đội B" data-match="'+m.id+'" data-side="sb" value="'+esc(m.sb)+'"><div class="right">'+m.b.map(id=>esc(state.names[id])).join(' + ')+'</div><button type="button" class="danger match-delete" data-delete-match="'+esc(m.id)+'">Xóa trận</button></div>').join('')).join('');
  $('matches').querySelectorAll('[data-delete-match]').forEach(button=>button.onclick=()=>{
   const match=state.matches.find(m=>m.id===button.dataset.deleteMatch);
   if(!match)return;
@@ -216,7 +260,7 @@ $('clearMatches').onclick=()=>{
 };
 $('generate').onclick=()=>generate();
 $('reshuffle').onclick=()=>generate(true);
-$('reset').onclick=()=>{if(!confirm('Xóa danh sách, lịch và kết quả Round Robin xoay partner trên trình duyệt này?'))return;state={names:[],matches:[]};save();$('names').value='';$('error').textContent='';render()};
+$('reset').onclick=()=>{if(!confirm('Xóa danh sách, lịch và kết quả Round Robin trên trình duyệt này?'))return;state={names:[],matches:[]};save();$('names').value='';$('error').textContent='';render()};
 render();
 const LIBRARY_KEY='pantry-quick-rr-sessions-v1';
 const META_KEY='pantry-quick-rr-current-meta';
@@ -229,7 +273,7 @@ function renderLibrary(){
  $('sessionTitle').value=meta.title||'';
  $('sessionDate').value=meta.date||localDate();
  const list=readLibrary();
- $('savedSessions').innerHTML=list.length?list.map((item,i)=>'<div class="team" style="margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="flex:1"><b>'+esc(item.title)+'</b><small>'+esc(item.date)+' · '+(item.state?.names?.length||0)+' VĐV'+(item.code?' · Phòng chung':' · Lưu trên máy')+'</small></span><button class="secondary" data-open-session="'+i+'">Mở</button><button class="danger" data-remove-session="'+i+'">Xóa</button></div>').join(''):'<p class="muted">Chưa có buổi Round Robin nào được lưu.</p>';
+ $('savedSessions').innerHTML=list.length?list.map((item,i)=>'<div class="team" style="margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="flex:1"><b>'+esc(item.title)+'</b><small>'+esc(item.date)+' · '+(item.state?.names?.length||0)+(item.state?.mode==='fixpair'?' đội · Fixpair':' VĐV')+(item.code?' · Phòng chung':' · Lưu trên máy')+'</small></span><button class="secondary" data-open-session="'+i+'">Mở</button><button class="danger" data-remove-session="'+i+'">Xóa</button></div>').join(''):'<p class="muted">Chưa có buổi Round Robin nào được lưu.</p>';
  $('savedSessions').querySelectorAll('[data-open-session]').forEach(b=>b.onclick=async()=>{
   const item=readLibrary()[Number(b.dataset.openSession)];if(!item)return;
   if(state.matches.length&&!confirm('Mở buổi này sẽ thay thế phiên hiện tại. Tiếp tục?'))return;
