@@ -1,3 +1,4 @@
+import { accountLogin } from './account-login.js';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 const date=value=>new Date(value).toLocaleString('vi-VN');
 const localDate=value=>{const d=new Date(value);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)};
@@ -20,7 +21,7 @@ export async function mountGuestAccounts(client,host){
   const refresh=()=>mountGuestAccounts(client,host);
   host.innerHTML=`<div class="toolbar"><h2>TÀI KHOẢN KHÁCH</h2><button data-create-guest>＋ TẠO TÀI KHOẢN KHÁCH</button></div><div class="cards">${accounts.map(a=>{
     const valid=a.is_active&&Date.parse(a.expires_at)>Date.now();
-    return `<article class="card"><h3>${esc(a.display_name)}</h3><p>${esc(a.email)}</p><strong>${valid?'🟢 HOẠT ĐỘNG':a.is_active?'HẾT HẠN':'ĐÃ KHÓA'}</strong><p>Hết hạn: ${esc(date(a.expires_at))}</p><p>Tự tạo giải: ${a.can_create_tournaments?'CÓ':'KHÔNG'}</p><p>${a.owned_count} giải tự tạo · ${a.assigned_count} giải được gán</p><div class="actions"><button data-extend="${a.user_id}">GIA HẠN</button><button data-assign="${a.user_id}">GÁN GIẢI</button><button data-permissions="${a.user_id}">QUẢN LÝ QUYỀN</button><button class="danger" data-lock="${a.user_id}">${a.is_active?'KHÓA ACCOUNT':'MỞ KHÓA'}</button></div></article>`;
+    return `<article class="card"><h3>${esc(a.display_name)}</h3><p>${esc(accountLogin(a.email))}</p><strong>${valid?'🟢 HOẠT ĐỘNG':a.is_active?'HẾT HẠN':'ĐÃ KHÓA'}</strong><p>Hết hạn: ${esc(date(a.expires_at))}</p><p>Tự tạo giải: ${a.can_create_tournaments?'CÓ':'KHÔNG'}</p><p>${a.owned_count} giải tự tạo · ${a.assigned_count} giải được gán</p><div class="actions"><button data-extend="${a.user_id}">GIA HẠN</button><button data-assign="${a.user_id}">GÁN GIẢI</button><button data-permissions="${a.user_id}">QUẢN LÝ QUYỀN</button><button class="danger" data-lock="${a.user_id}">${a.is_active?'KHÓA ACCOUNT':'MỞ KHÓA'}</button></div></article>`;
   }).join('')||'<p>Chưa có tài khoản khách.</p>'}</div><p role="alert" data-account-error></p>`;
   host.querySelector('[data-create-guest]').onclick=()=>createAccount(client,refresh);
   for(const a of accounts){
@@ -37,15 +38,15 @@ export async function mountGuestAccounts(client,host){
   }
 }
 function createAccount(client,refresh){
-  const panel=modal('TẠO TÀI KHOẢN KHÁCH',`<form><label>Tên người/BTC<input name="display_name" required maxlength="160"></label><label>Email đăng nhập<input name="email" type="email" required autocomplete="off"></label><label>Mật khẩu<input name="password" type="password" required minlength="8" maxlength="256" autocomplete="new-password"></label><label>Ngày giờ hết hạn (giờ địa phương)<input name="expires_at" type="datetime-local" required></label><label><input name="can_create" type="checkbox" checked> Cho phép tự tạo giải</label><button>TẠO ACCOUNT</button><p role="alert"></p></form>`);
+  const panel=modal('TẠO TÀI KHOẢN KHÁCH',`<form><label>Tên người/BTC<input name="display_name" required maxlength="160"></label><label>Tên đăng nhập<input name="username" type="text" required minlength="3" maxlength="40" pattern="[a-zA-Z0-9][a-zA-Z0-9._-]{2,39}" autocomplete="off" autocapitalize="none" spellcheck="false"><small>3–40 ký tự: chữ không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang.</small></label><label>Mật khẩu<input name="password" type="password" required minlength="8" maxlength="256" autocomplete="new-password"></label><label>Ngày giờ hết hạn (giờ địa phương)<input name="expires_at" type="datetime-local" required></label><label><input name="can_create" type="checkbox" checked> Cho phép tự tạo giải</label><button>TẠO ACCOUNT</button><p role="alert"></p></form>`);
   const form=panel.querySelector('form');
   form.onsubmit=async e=>{
     e.preventDefault();const button=form.querySelector('button');button.disabled=true;
-    const fd=new FormData(form),password=fd.get('password'),email=fd.get('email');
+    const fd=new FormData(form),password=fd.get('password'),username=fd.get('username').trim().toLowerCase();
     try{
-      const result=await accountRequest(client,{display_name:fd.get('display_name'),email,password,expires_at:new Date(fd.get('expires_at')).toISOString(),can_create_tournaments:fd.has('can_create')});
+      const result=await accountRequest(client,{display_name:fd.get('display_name'),username,password,expires_at:new Date(fd.get('expires_at')).toISOString(),can_create_tournaments:fd.has('can_create')});
       form.innerHTML=`<p>✓ Đã tạo account</p><p>${esc(result.warning||'')}</p><label>Thông tin đăng nhập<textarea readonly rows="3"></textarea></label><button type="button">SAO CHÉP ĐĂNG NHẬP</button><p role="status"></p>`;
-      const credentials=`Email: ${email}\nMật khẩu: ${password}`;form.querySelector('textarea').value=credentials;
+      const credentials=`Tên đăng nhập: ${username}\nMật khẩu: ${password}`;form.querySelector('textarea').value=credentials;
       form.querySelector('button').onclick=async()=>{try{await navigator.clipboard.writeText(credentials);form.querySelector('[role=status]').textContent='Đã sao chép.'}catch{form.querySelector('textarea').select();form.querySelector('[role=status]').textContent='Chọn và sao chép thông tin đăng nhập.'}};
       await refresh();
     }catch(error){form.querySelector('[role=alert]').textContent=error.message;button.disabled=false}

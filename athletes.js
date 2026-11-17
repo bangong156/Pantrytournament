@@ -1,3 +1,4 @@
+import { loginEmail } from './account-login.js';
 import {createClient} from '@supabase/supabase-js';
 const db=createClient('https://duuklzzxpegptsarcbqq.supabase.co','sb_publishable_FmGKX67AD3M4QvCuL3dSyg_w0X5vIX9');
 const $=id=>document.getElementById(id);
@@ -164,7 +165,8 @@ $('adminAthleteToggle').onclick=async()=>{
 };
 $('adminAthleteSignIn').onclick=async()=>{
  adminMessage('Đang xác thực…');
- const {error}=await db.auth.signInWithPassword({email:$('adminAthleteEmail').value.trim(),password:$('adminAthletePassword').value});
+ let identifier;try{identifier=loginEmail($('adminAthleteEmail').value)}catch(error){adminMessage(error.message);return}
+ const {error}=await db.auth.signInWithPassword({email:identifier,password:$('adminAthletePassword').value});
  if(error){adminMessage('Đăng nhập thất bại: '+error.message);return}
  $('adminAthletePassword').value='';await loadAdminAthletes();
 };
