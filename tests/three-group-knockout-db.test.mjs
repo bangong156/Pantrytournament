@@ -16,6 +16,7 @@ before(async()=>{
  await db.exec(original.slice(original.indexOf('create function pantry_knockout.inputs('),original.indexOf('create function pantry_knockout.read_inputs(')));
  await db.exec(await readFile(new URL('../supabase/migrations/20261113042715_three_group_knockout.sql',import.meta.url),'utf8'));
  await db.exec(await readFile(new URL('../supabase/migrations/20261113081416_two_team_head_to_head.sql',import.meta.url),'utf8'));
+ await db.exec(await readFile(new URL('../supabase/migrations/20261121164654_two_group_knockout.sql',import.meta.url),'utf8'));
 });
 after(async()=>{await db?.close()});
 async function scope(event){await sql("select set_config('test.event',$1,false)",[event])}
@@ -61,4 +62,10 @@ test('SQL accepts head-to-head winner with worse difference and rejects reversed
  assert.equal((await one('select pantry_knockout.validate_snapshot($1,$2) n',[f.event,JSON.stringify(q.snapshot)])).n,3);
  const rows=q.snapshot.standings[0].rows;[rows[0],rows[1]]=[rows[1],rows[0]];rows.forEach((r,i)=>r.group_position=i+1);
  await assert.rejects(()=>sql('select pantry_knockout.validate_snapshot($1,$2)',[f.event,JSON.stringify(q.snapshot)]),/head-to-head first/);
+});
+
+test('SQL validates the two-group direct semifinal qualifiers',async()=>{
+ const f=await fixture(2),q=qualify(f.standings);
+ q.snapshot.input_state=(await one('select pantry_knockout.inputs($1) inputs',[f.event])).inputs;
+ assert.equal((await one('select pantry_knockout.validate_snapshot($1,$2) n',[f.event,JSON.stringify(q.snapshot)])).n,2);
 });

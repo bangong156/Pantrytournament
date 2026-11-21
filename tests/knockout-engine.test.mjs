@@ -102,3 +102,12 @@ test('three-group symbolic preview includes all rounds before any scores exist',
  for(const label of ['Nhất A','Nhất B','Nhất C','Nhì A','Nhì B','Nhì C','Hạng 3 · suất 1','Hạng 3 · suất 2','Thắng QF-1','Thắng SF-2'])assert.ok(html.includes(label),label);
  assert.equal((html.match(/class="knockout-card"/g)||[]).length,7);
 });
+
+test('two groups cross-seed four teams directly into semifinals',()=>{
+ const result=qualify(standings(2)), bracket=buildBracket(result);
+ assert.deepEqual(bracket.map(m=>[m.stage,m.team1_id,m.team2_id]),[
+  ['semifinal','A1','B2'],['semifinal','B1','A2'],['final',null,null]
+ ]);
+ assert.deepEqual([bracket[2].team1_source_code,bracket[2].team2_source_code],['SF-1','SF-2']);
+ assert.ok(result.qualifiers.every(team=>team.entry_stage==='semifinal'));
+});

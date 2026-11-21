@@ -17,12 +17,12 @@ export function threeGroupPreview(){
   return `<section class="panel"><h2>XEM TRƯỚC NHÁNH 3 BẢNG</h2><p>Nhất, Nhì mỗi bảng + 2 đội hạng 3 có hiệu số cao nhất vào Tứ kết. Nếu bằng hiệu số, xét tổng điểm ghi được; bằng cả hai thì Admin bốc thăm.</p><p>Hai suất hạng 3 được ghép tránh gặp Nhất cùng bảng. Đây là sơ đồ theo thứ hạng; chưa cần hoàn tất vòng bảng.</p>${publicBracket(nodes,labels)}</section>`;
 }
 
-function fiveGroupPreview(groups){
+function seededPreview(groups){
   const pantryGroup=groups.find(group=>group.id==='edd73fb4-9e56-4885-856a-63453b146df0');
   const exampleGroup=pantryGroup||groups.at(-1);
   const standings=groups.map(group=>({
     group,
-    rows:Array.from({length:group===exampleGroup?3:2},(_,i)=>({
+    rows:Array.from({length:groups.length===5&&group===exampleGroup?3:2},(_,i)=>({
       id:`${group.id}:${i+1}`,
       name:`${group.name}${i+1}`,
       w:0,diff:0,pf:0
@@ -30,12 +30,16 @@ function fiveGroupPreview(groups){
   }));
   const result=qualify(standings);
   const labels=Object.fromEntries(result.qualifiers.map(team=>[team.team_id,team.name]));
-  return `<details class="panel">
-    <summary><strong>Xem trước nhánh 5 bảng · A1, B2…</strong></summary>
-    <p>5 đội nhất bảng vào thẳng tứ kết. 5 đội nhì bảng và ${pantryGroup?'đội hạng ba bảng E':'đội hạng ba tốt nhất'} đá 3 trận playoff.</p>
-    <p>${pantryGroup?'Vé vớt dành cho':'Sơ đồ minh họa giả sử'} <strong>${esc(exampleGroup.name)}3</strong> nhận vé vớt. Cặp đấu thực tế được xác định sau vòng bảng.</p>
-    ${publicBracket(buildBracket(result),labels)}
-  </details>`;
+  const rules=groups.length===2?[
+    'Nhất và nhì mỗi bảng vào thẳng bán kết.',
+    'Bán kết: Nhất A gặp Nhì B; Nhất B gặp Nhì A. Hai đội thắng vào chung kết.'
+  ]:[
+    '5 đội nhất bảng vào thẳng tứ kết.',
+    pantryGroup?'5 đội nhì bảng và đội hạng ba bảng E đấu 3 trận playoff.':'5 đội nhì bảng và đội hạng ba tốt nhất đấu 3 trận playoff.',
+    '3 đội thắng playoff vào tứ kết. Thắng tứ kết vào bán kết; thắng bán kết vào chung kết.',
+    pantryGroup?'Sơ đồ mẫu dùng vé hạng ba bảng E.':`Sơ đồ mẫu giả sử ${exampleGroup.name}3 nhận vé vớt. Xét hiệu số, rồi tổng điểm ghi được; nếu vẫn bằng tại ngưỡng đi tiếp thì bốc thăm.`
+  ];
+  return {nodes:buildBracket(result),labels,rules};
 }
 
 export function publicBracket(matches,teamNames,{admin=false}={}){
@@ -81,14 +85,14 @@ export function publicBracket(matches,teamNames,{admin=false}={}){
     })).join('');
   return `<div class="knockout-scroll" role="region" aria-label="Nhánh knockout · Cuộn ngang để xem các vòng" tabindex="0"><div class="knockout-bracket ${admin?'knockout-bracket-admin':''}" style="--round-count:${rounds.length};--bracket-rows:${rows*2}">${rounds.map((round,i)=>`<section class="knockout-round" style="grid-column:${i+1}" aria-label="${knockoutLabel(round.stage)}"><h2>${knockoutLabel(round.stage)}</h2>${round.matches.map(card).join('')}${edges(i)}</section>`).join('')}</div></div>`;
 }
-function knockoutPoster(matches,teamNames,eventName){
+function knockoutPoster(matches,teamNames,eventName,rules=[]){
  const rounds=knockoutStages.map(stage=>({stage,matches:matches.filter(m=>m.stage===stage).sort((a,b)=>(a.scheduled_order??0)-(b.scheduled_order??0))})).filter(r=>r.matches.length);
  if(!rounds.length)throw Error('Chưa có nhánh Knockout để xuất ảnh.');
  const playoffs=rounds.find(round=>round.stage==='playoff');
  if(playoffs?.matches.length===3&&rounds.some(round=>round.stage==='quarterfinal'&&round.matches.length===4)){
   playoffs.matches.sort((a,b)=>b.match_code.localeCompare(a.match_code,undefined,{numeric:true}));
  }
- const cardW=370,cardH=142,colGap=105,top=260,bottom=100,left=75,spacing=26;
+ const cardW=370,cardH=142,colGap=105,top=260,bottom=100+rules.length*38,left=75,spacing=26;
  const firstCount=Math.max(...rounds.map(r=>r.matches.length));
  const rowStep=cardH+spacing;
  const width=left*2+rounds.length*cardW+(rounds.length-1)*colGap;
@@ -122,11 +126,13 @@ function knockoutPoster(matches,teamNames,eventName){
    }
   }
  }
+ c.fillStyle='#d0dcc2';c.font='22px system-ui,sans-serif';
+ rules.forEach((rule,i)=>c.fillText(rule,left,height-bottom+32+i*38,width-left*2));
  c.fillStyle='#bbd0ab';c.font='22px system-ui,sans-serif';c.fillText('giaipantry.com',left,height-47);
  return canvas;
 }
-function openKnockoutPoster(matches,teamNames,eventName){
- let canvas;try{canvas=knockoutPoster(matches,teamNames,eventName)}catch(error){alert(error.message);return}
+function openKnockoutPoster(matches,teamNames,eventName,rules=[]){
+ let canvas;try{canvas=knockoutPoster(matches,teamNames,eventName,rules)}catch(error){alert(error.message);return}
  const overlay=document.createElement('div');overlay.className='overlay';overlay.style.zIndex='10000';
  const image=canvas.toDataURL('image/png'),filename='pantry-knockout-'+new Date().toISOString().slice(0,10)+'.png';
  overlay.innerHTML=`<div class="modal" style="width:min(96vw,1000px);max-height:94dvh;overflow:auto"><div class="modalhead"><h2>Ảnh nhánh Knockout</h2><button class="x" type="button" aria-label="Đóng">×</button></div><p>Tải ảnh PNG hoặc chia sẻ trực tiếp cho VĐV.</p><img alt="Sơ đồ nhánh Knockout" src="${image}" style="display:block;width:100%;max-height:65dvh;object-fit:contain;background:#142319;border-radius:12px"><div class="actions" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:15px"><button type="button" id="koPosterDownload">⬇ TẢI ẢNH PNG</button><button type="button" class="secondary" id="koPosterShare">CHIA SẺ</button><button type="button" class="ghost" id="koPosterClose">Đóng</button></div><p id="koPosterError" role="status"></p></div>`;
@@ -205,7 +211,11 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
     const planGroups=(groupInput.groups||[]).slice().sort((a,b)=>a.group_order-b.group_order);
     if(!isCurrent())return;
     if(planGroups.length===3)controls.insertAdjacentHTML('beforebegin',threeGroupPreview());
-    if(planGroups.length===5)controls.insertAdjacentHTML('beforebegin',fiveGroupPreview(planGroups));
+    if([2,5].includes(planGroups.length)){
+      const {nodes,labels,rules}=seededPreview(planGroups);
+      controls.insertAdjacentHTML('beforebegin',`<details class="panel"><summary><strong>Xem trước nhánh ${planGroups.length} bảng</strong></summary>${rules.map(rule=>`<p>${esc(rule)}</p>`).join('')}${publicBracket(nodes,labels)}<button type="button" id="koExportDemo">📷 XUẤT ẢNH DEMO KÈM ĐIỀU LỆ</button></details>`);
+      host.querySelector('#koExportDemo').onclick=()=>openKnockoutPoster(nodes,labels,event.name+' · DEMO',rules);
+    }
     let knockoutPreplan=null;
     if(planGroups.length===4){
       const {data:savedPlan,error:planError}=await client.rpc('pantry_knockout_preplan_get',{p_event:event.id});
@@ -276,7 +286,7 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
         const paint=()=>{
           const result=qualify(standings,draws);result.snapshot.input_state=inputs;
           const nodes=result.unresolved.length?[]:buildBracket(redraw&&!knockoutPreplan?{...result,qualifiers:shuffle(result.qualifiers),snapshot:{...result.snapshot,standings:shuffle(result.snapshot.standings)}}:result,knockoutPreplan);
-          preview.innerHTML=`<div class="panel"><h2>XEM TRƯỚC NHÁNH KNOCKOUT</h2><h3>${result.group_count===5?'VÀO THẲNG TỨ KẾT':`${result.qualifiers.length} ĐỘI VÀO VÒNG LOẠI`}</h3>${[['group_winner',result.group_count===5?'VÀO THẲNG TỨ KẾT':'NHẤT BẢNG'],['runner_up','NHÌ BẢNG'],['wildcard_third','VÉ VỚT HẠNG 3']].map(([type,label])=>`<h3>${label}</h3><ul>${result.qualifiers.filter(q=>q.qualification_type===type&&!result.unresolved.some(t=>t.teams.some(x=>x.team_id===q.team_id))).map(q=>`<li>${esc(q.group_name)}${q.group_position} · ${esc(q.name)}${q.group_position===3?` · ${q.point_difference>0?'+':''}${q.point_difference} / ${q.points_scored} điểm`:''}</li>`).join('')}</ul>`).join('')}${result.unresolved.map((tie,i)=>`<fieldset><legend>Đồng hạng vé vớt: chọn thứ tự bốc thăm (${tie.slots} suất)</legend><p>Hiệu số ${tie.point_difference} · Tổng điểm ${tie.points_scored}. Nhập thứ tự đầy đủ, không trùng.</p>${tie.teams.map((q,j)=>`<label>${esc(q.group_name)}3 · ${esc(q.name)}<input data-draw="${i}" data-team="${esc(q.team_id)}" type="number" min="1" max="${tie.teams.length}" placeholder="Thứ tự"></label>`).join('')}<button data-resolve="${i}">Xác nhận thứ tự bốc thăm</button></fieldset>`).join('')}${nodes.length?publicBracket(nodes,Object.fromEntries(result.qualifiers.map(q=>[q.team_id,`${q.group_name}${q.group_position} · ${q.name}`]))):''}<p role="alert" id="koError"></p>${nodes.length?`<button id="koRedraw" class="secondary">${result.group_count===3||knockoutPreplan?'CẬP NHẬT NHÁNH TỪ BXH':'VẼ LẠI'}</button><button id="koPreviewExport" class="secondary">📷 XUẤT ẢNH NHÁNH</button><button id="koGenerate">XÁC NHẬN NHÁNH</button>`:''}</div>`;
+          preview.innerHTML=`<div class="panel"><h2>XEM TRƯỚC NHÁNH KNOCKOUT</h2><h3>${result.group_count===5?'VÀO THẲNG TỨ KẾT':`${result.qualifiers.length} ĐỘI VÀO VÒNG LOẠI`}</h3>${[['group_winner',result.group_count===5?'VÀO THẲNG TỨ KẾT':'NHẤT BẢNG'],['runner_up','NHÌ BẢNG'],['wildcard_third','VÉ VỚT HẠNG 3']].map(([type,label])=>`<h3>${label}</h3><ul>${result.qualifiers.filter(q=>q.qualification_type===type&&!result.unresolved.some(t=>t.teams.some(x=>x.team_id===q.team_id))).map(q=>`<li>${esc(q.group_name)}${q.group_position} · ${esc(q.name)}${q.group_position===3?` · ${q.point_difference>0?'+':''}${q.point_difference} / ${q.points_scored} điểm`:''}</li>`).join('')}</ul>`).join('')}${result.unresolved.map((tie,i)=>`<fieldset><legend>Đồng hạng vé vớt: chọn thứ tự bốc thăm (${tie.slots} suất)</legend><p>Hiệu số ${tie.point_difference} · Tổng điểm ${tie.points_scored}. Nhập thứ tự đầy đủ, không trùng.</p>${tie.teams.map((q,j)=>`<label>${esc(q.group_name)}3 · ${esc(q.name)}<input data-draw="${i}" data-team="${esc(q.team_id)}" type="number" min="1" max="${tie.teams.length}" placeholder="Thứ tự"></label>`).join('')}<button data-resolve="${i}">Xác nhận thứ tự bốc thăm</button></fieldset>`).join('')}${nodes.length?publicBracket(nodes,Object.fromEntries(result.qualifiers.map(q=>[q.team_id,`${q.group_name}${q.group_position} · ${q.name}`]))):''}<p role="alert" id="koError"></p>${nodes.length?`<button id="koRedraw" class="secondary">${result.group_count<=3||knockoutPreplan?'CẬP NHẬT NHÁNH TỪ BXH':'VẼ LẠI'}</button><button id="koPreviewExport" class="secondary">📷 XUẤT ẢNH NHÁNH</button><button id="koGenerate">XÁC NHẬN NHÁNH</button>`:''}</div>`;
           preview.querySelectorAll('[data-resolve]').forEach(button=>button.onclick=async()=>{
             const i=Number(button.dataset.resolve),tie=result.unresolved[i],items=[...preview.querySelectorAll(`[data-draw="${i}"]`)].map(input=>({id:input.dataset.team,rank:Number(input.value)}));
             if(items.some(x=>!Number.isInteger(x.rank)||x.rank<1||x.rank>items.length)||new Set(items.map(x=>x.rank)).size!==items.length){preview.querySelector('#koError').textContent='Cần nhập đầy đủ thứ tự 1 đến '+items.length;return}
@@ -298,7 +308,7 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
             await controls.querySelector('#koPreviewButton').onclick();
             if(!isCurrent())return;
             const feedback=preview.querySelector('#koError');
-            if(feedback)feedback.textContent=result.group_count===3||knockoutPreplan
+            if(feedback)feedback.textContent=result.group_count<=3||knockoutPreplan
               ?'Đã cập nhật nhánh theo BXH mới nhất. Vị trí ghép bảng giữ theo thể thức đã chốt. Bấm XÁC NHẬN NHÁNH để lưu.'
               :'Đã vẽ lại từ BXH mới nhất. Bấm XÁC NHẬN NHÁNH để lưu.';
           };

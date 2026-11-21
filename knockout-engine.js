@@ -6,13 +6,13 @@ const key=q=>String(q.team_id);
 const sameSet=(a,b)=>a.length===b.length&&new Set(a).size===a.length&&[...a].sort().join(',')===[...b].sort().join(',');
 export function qualify(standings,draws=[]){
   const n=standings.length;
-  if(n<3||n>8)throw new Error('Knockout hỗ trợ 3–8 bảng.');
+  if(n<2||n>8)throw new Error('Knockout hỗ trợ 2–8 bảng.');
   const normalized=standings.map(({group,rows})=>({group_id:group.id,rows:rows.map((r,i)=>({team_id:r.id,group_position:i+1,wins:r.w,point_difference:r.diff,points_scored:r.pf}))}));
-  const candidates=standings.flatMap(({group,rows})=>rows.slice(0,3).map((r,i)=>({team_id:r.id,group_id:group.id,group_name:group.name,name:r.name,group_position:i+1,point_difference:r.diff,points_scored:r.pf,qualification_type:['group_winner','runner_up','wildcard_third'][i],entry_stage:n<=4?'quarterfinal':n===5?(i===0?'quarterfinal':'playoff'):'round_of_16'})));
+  const candidates=standings.flatMap(({group,rows})=>rows.slice(0,3).map((r,i)=>({team_id:r.id,group_id:group.id,group_name:group.name,name:r.name,group_position:i+1,point_difference:r.diff,points_scored:r.pf,qualification_type:['group_winner','runner_up','wildcard_third'][i],entry_stage:n===2?'semifinal':n<=4?'quarterfinal':n===5?(i===0?'quarterfinal':'playoff'):'round_of_16'})));
   if(standings.some(s=>s.rows.length<2)||new Set(candidates.map(key)).size!==candidates.length)throw new Error('Mỗi bảng cần ít nhất 2 đội và không được trùng đội.');
   const pantryWildcardGroup=n===5&&standings.find(({group})=>group.id==='edd73fb4-9e56-4885-856a-63453b146df0')?.group.id;
   const thirds=candidates.filter(q=>q.group_position===3&&(!pantryWildcardGroup||q.group_id===pantryWildcardGroup)).sort((a,b)=>compareWildcard(a,b)||key(a).localeCompare(key(b)));
-  const count=({3:2,4:0,5:1,6:4,7:2,8:0})[n];
+  const count=({2:0,3:2,4:0,5:1,6:4,7:2,8:0})[n];
   if(thirds.length<count)throw new Error('Không đủ đội hạng 3 cho thể thức này.');
   const unresolved=[],usedDraws=[];
   for(let i=0;i<thirds.length;){
@@ -60,6 +60,13 @@ export function buildBracket(result,preplan=null){
     for(let i=0;i<slots.length;i+=2){const a=slots[i],b=slots[i+1],code=`${prefix}-${i/2+1}`;nodes.push({match_code:code,stage,scheduled_order:nodes.length+1,team1_id:a.team_id||null,team2_id:b.team_id||null,team1_source_code:a.source||null,team2_source_code:b.source||null});codes.push({source:code})}return codes;
   };
   let next;
+  if(n===2){
+    const groups=result.snapshot.standings.map(g=>g.group_id);
+    const get=(group,position)=>entrant(q.find(team=>team.group_id===group&&team.group_position===position));
+    next=round('semifinal','SF',[get(groups[0],1),get(groups[1],2),get(groups[1],1),get(groups[0],2)]);
+    round('final','F',next);
+    return nodes;
+  }
   if(n===8){const get=(g,p)=>entrant(q.find(x=>x.group_id===result.snapshot.standings[g].group_id&&x.group_position===p));next=round('round_of_16','R16',[[0,1,1,2],[2,1,3,2],[4,1,5,2],[6,1,7,2],[7,1,6,2],[5,1,4,2],[3,1,2,2],[1,1,0,2]].flatMap(([a,p,b,r])=>[get(a,p),get(b,r)]));}
   else if(n>=6)next=round('round_of_16','R16',assign16(q));
   else if(n===3){
