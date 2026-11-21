@@ -940,7 +940,7 @@ async function renderTeams(t,teams){const db=competitionClient(supabase,activeEv
  const typed=prompt('Nhập XOA TAT CA để xác nhận xóa toàn bộ đội:');
  if(typed!=='XOA TAT CA')return;
  const button=document.querySelector('#clearAllTeams');button.disabled=true;button.textContent='Đang xóa…';
- const {data,error}=await supabase.rpc('pantry_clear_event_teams',{p_event:activeEvent.id});
+ const {data,error}=await supabase.rpc('pantry_clear_event_teams',{p_event:activeEvent.id}).setHeader('x-client-info',`pantry-event/${activeEvent.id}`);
  if(error){alert('Không thể xóa: '+error.message);button.disabled=false;button.textContent='Xóa tất cả đội';return}
  alert(`Đã xóa ${data} đội khỏi nội dung này.`);
  if(epoch===renderEpoch)await workspace(t.id,'teams');
