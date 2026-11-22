@@ -1,3 +1,4 @@
+import { knockoutPodium, downloadAwardsPoster } from './awards-podium.js'
 import { loginEmail } from './account-login.js';
 import { rankGroupRows } from './group-ranking.js'
 import { mountRefereeTimeouts } from './referee-timeouts.js'
@@ -182,22 +183,25 @@ async function publicTournament(tid,tab='overview',eventId=null,detail=null){
   Promise.resolve({data:{...tournament,format:activeEvent.format}}),
   db.from('groups').select('id,name,group_order').eq('tournament_id',tid).order('group_order'),
   db.from('teams').select('id,name,registration_order,poster_path').eq('tournament_id',tid).order('registration_order'),
-  db.from('matches').select('id,group_id,stage,match_code,status,scheduled_order,team1_id,team2_id,team1_score,team2_score,court_number,team1_source_match_id,team2_source_match_id').eq('tournament_id',tid).order('match_code'),
+  db.from('matches').select('id,group_id,stage,match_code,status,scheduled_order,team1_id,team2_id,team1_score,team2_score,court_number,team1_source_match_id,team2_source_match_id,winner_id').eq('tournament_id',tid).order('match_code'),
   standingsData(tid),
-  db.from('tournament_awards').select('placement,placement_slot,team_name,player_names').eq('tournament_id',tid).order('placement').order('placement_slot'),
+  db.from('tournament_awards').select('placement,placement_slot,team_id,team_name,player_names').eq('tournament_id',tid).order('placement').order('placement_slot'),
   supabase.rpc('public_event_roster',{p_event_id:db.event.id})
  ]);
  if(epoch!==renderEpoch)return;
  if(!t)return publicDashboard();
  const links=(standings||[]).flatMap(item=>item.rows.map(row=>({group_id:item.group.id,team_id:row.id})));
- const tabs=[['overview','TỔNG QUAN'],['teams','VĐV / ĐỘI'],['groups','CHIA BẢNG'],['matches','TRẬN ĐẤU'],['standings','BXH'],['knockout','KNOCKOUT'],['info','THÔNG TIN GIẢI'],...(awards?.length?[['awards','VINH DANH']]:[])];
- if(!tabs.some(x=>x[0]===tab))tab='overview';
  const teamMap=Object.fromEntries((teams||[]).map(x=>[x.id,x.name]));
  const members=Object.fromEntries((roster||[]).map(x=>[x.team_id,x.player_names||[]]));
+ const podium=knockoutPodium(matches||[],teams||[],members,awards||[]);
+ const displayedAwards=podium.length?podium:awards||[];
+ const tabs=[['overview','TỔNG QUAN'],['teams','VĐV / ĐỘI'],['groups','CHIA BẢNG'],['matches','TRẬN ĐẤU'],['standings','BXH'],['knockout','KNOCKOUT'],['info','THÔNG TIN GIẢI'],...(displayedAwards.length?[['awards','VINH DANH']]:[])];
+ if(!tabs.some(x=>x[0]===tab))tab='overview';
  const teamOrder=Object.fromEntries((teams||[]).map((x,i)=>[x.id,i]));
- const context={t,bracket:(matches||[]).filter(m=>m.stage!=='group'),groups:groups||[],teams:teams||[],matches:validMatches(matches||[],teams||[]).map(m=>({...m,match_code:scheduledMatchCode(m,groups?.find(g=>g.id===m.group_id)?.name)})),standings:standings||[],awards:awards||[],links,teamMap,members,teamOrder,rosterError,registeredPlayers:roster?.[0]?.registered_players};
+ const context={t,bracket:(matches||[]).filter(m=>m.stage!=='group'),groups:groups||[],teams:teams||[],matches:validMatches(matches||[],teams||[]).map(m=>({...m,match_code:scheduledMatchCode(m,groups?.find(g=>g.id===m.group_id)?.name)})),standings:standings||[],awards:displayedAwards,links,teamMap,members,teamOrder,rosterError,registeredPlayers:roster?.[0]?.registered_players};
  const displayDate=t.start_date?.split('-').reverse().join('/')||'—';
  app.innerHTML=`<header class="public-header public-tournament-header"><div><button class="ghost" id="publicBack" aria-label="Quay lại danh sách giải"><span class="public-back-full">← Danh sách giải</span><span class="public-back-mobile" aria-hidden="true">←</span></button>${pantryLogoMarkup('pantry-logo-small')}<b class="public-header-title">${esc(t.name)}</b></div><button id="beReferee">⚖ Tôi là trọng tài</button></header><main class="wrap public-event public-hub"><div class="public-event-head"><div><button class="secondary" id="shareTournament">Chia sẻ giải</button><span id="shareFeedback" role="status"></span><small>${t.event_type==='minigame'?'MINIGAME':'GIẢI ĐẤU'} · ${t.format==='mlp'?'MLP':'ĐÁNH ĐÔI'}</small><h1>${esc(t.name)}</h1><p>${esc(displayDate)}${tournament.start_time?' • '+esc(tournament.start_time.slice(0,5)):''} · ${groups?.length||0} bảng</p></div>${!teamsError&&!matchesError&&eventState(context.matches)?`<div class="spectator-event-state">${eventState(context.matches)}</div>`:''}</div>${publicEventSelector()}${tournamentEvents.length>1?`<div class="event-context">→ ${esc(activeEvent.name)}${activeEvent.start_time?' · '+esc(activeEvent.start_time.slice(0,5)):''}</div>`:''}${teamsError||groupsError||matchesError?'<p class="public-hub-note">Chưa tải được tiến độ thi đấu.</p>':`<div class="spectator-summary">${esc(summaryText(teams||[],groups||[],context.matches,t.format))}<span data-live-count></span></div><div id="spectatorNext"></div>`}<div class="public-hub-tab-shell"><nav class="public-hub-tabs" aria-label="Nội dung giải đấu">${tabs.map(([key,label])=>`<button data-public-tab="${key}" class="${tab===key?'public-hub-tab-active':''}" ${tab===key?'aria-current="page"':''}>${label}</button>`).join('')}</nav></div><div class="public-hub-view">${publicHubContent(tab,context)}</div></main><div id="modal"></div>`;
+ app.querySelector('[data-export-awards]')?.addEventListener('click',()=>downloadAwardsPoster({title:t.name,event:activeEvent.name,awards:displayedAwards}));
  const tabBar=app.querySelector('.public-hub-tabs'),selectedTab=tabBar.querySelector('.public-hub-tab-active');
  if(selectedTab)tabBar.scrollLeft=selectedTab.offsetLeft-tabBar.offsetLeft-(tabBar.clientWidth-selectedTab.offsetWidth)/2;
  document.querySelector('#publicBack').onclick=publicDashboard;
@@ -757,17 +761,18 @@ const awardMedals={1:'🥇',2:'🥈',3:'🥉'};
 function awardShowcase(awards){
  if(!awards.length)return '';
  const tied=awards.some(a=>a.placement===3&&a.placement_slot===2);
- return `<section class="awards-showcase" aria-label="Vinh danh"><div class="awards-showcase-heading"><small>THE PANTRY · HONORS</small><h2>VINH DANH</h2></div><div class="awards-podium ${tied?'awards-podium-tied':''}">${awards.map(a=>`<article class="awards-podium-card awards-podium-${a.placement}"><div class="awards-medal" aria-hidden="true">${awardMedals[a.placement]||''}</div><small>${awardLabels[a.placement]||''}</small>${a.team_name?`<h3>${esc(a.team_name)}</h3>`:''}${a.player_names?`<p>${esc(a.player_names)}</p>`:''}</article>`).join('')}</div></section>`;
+ return `<section class="awards-showcase" aria-label="Vinh danh"><div class="awards-showcase-heading"><small>THE PANTRY · HONORS</small><h2>VINH DANH</h2></div><div class="awards-podium ${tied?'awards-podium-tied':''}">${awards.map(a=>`<article class="awards-podium-card awards-podium-${a.placement}"><div class="awards-medal" aria-hidden="true">${awardMedals[a.placement]||''}</div><small>${awardLabels[a.placement]||''}</small>${a.team_name?`<h3>${esc(a.team_name)}</h3>`:''}${a.player_names?`<p>${esc(a.player_names)}</p>`:''}</article>`).join('')}</div><button type="button" class="secondary" data-export-awards>Xuất ảnh vinh danh PNG</button></section>`;
 }
 async function renderAwards(tid,teams,roster=null){const db=competitionClient(supabase,activeEvent);
  const epoch=renderEpoch;
  const awardsRequest=db.from('tournament_awards').select('placement,placement_slot,team_id,team_name,player_names').eq('tournament_id',tid).order('placement').order('placement_slot');
  const isAdmin=String(profile?.role||'').toLowerCase()==='admin'||organizerAccess(tid);
  const memberRequest=isAdmin&&!roster&&teams.length?db.from('team_members').select('team_id,player_id,slot_order').in('team_id',teams.map(t=>t.id)):Promise.resolve({data:[]});
- const [{data:awards,error},{data:members,error:memberError}]=await Promise.all([awardsRequest,memberRequest]);
+ const matchesRequest=db.from('matches').select('stage,status,match_code,team1_id,team2_id,winner_id').neq('stage','group');
+ const [{data:awards,error},{data:members,error:memberError},{data:matches,error:matchesError}]=await Promise.all([awardsRequest,memberRequest,matchesRequest]);
  if(epoch!==renderEpoch)return;
  const area=document.querySelector('#workcontent');
- if(error||memberError){area.innerHTML=`<div class="panel">${esc((error||memberError).message)}</div>`;return}
+ if(error||memberError||matchesError){area.innerHTML=`<div class="panel">${esc((error||memberError||matchesError).message)}</div>`;return}
  if(isAdmin&&!roster){
   const ids=[...new Set((members||[]).map(m=>m.player_id))];
   const {data:players,error:playerError}=ids.length?await supabase.from('players').select('id,full_name').in('id',ids):{data:[]};
@@ -776,6 +781,7 @@ async function renderAwards(tid,teams,roster=null){const db=competitionClient(su
   const names=Object.fromEntries((players||[]).map(p=>[p.id,p.full_name]));
   roster=Object.fromEntries(teams.map(t=>[t.id,(members||[]).filter(m=>m.team_id===t.id).sort((a,b)=>a.slot_order-b.slot_order).map(m=>names[m.player_id]).filter(Boolean).join('\n')]));
  }
+ const podium=knockoutPodium(matches||[],teams,roster||{},awards||[]);
  const byKey=Object.fromEntries((awards||[]).map(a=>[`${a.placement}-${a.placement_slot}`,a]));
  const tied=!!byKey['3-2'];
  const positions=[[1,1],[2,1],[3,1],...(isAdmin||tied?[[3,2]]:[])];
@@ -783,7 +789,8 @@ async function renderAwards(tid,teams,roster=null){const db=competitionClient(su
   const key=`${placement}-${slot}`,a=byKey[key],label=awardLabels[placement],manual=!!a&&!a.team_id;
   return `<article class="panel awards-editor-card" data-award-card="${key}" data-award-editing="${manual}" ${placement===3&&slot===2&&!tied?'hidden':''}><div class="awards-editor-title"><span aria-hidden="true">${awardMedals[placement]}</span><h2>${label}</h2></div>${isAdmin?`<div class="awards-team-picker"><label for="award-select-${key}">Chọn đội / cặp</label><div class="awards-picker-control"><input type="search" data-award-search="${key}" placeholder="Tìm đội / cặp…" aria-label="Tìm đội hoặc cặp"><select id="award-select-${key}" data-award-select="${key}"><option value="">Chọn đội / cặp</option>${teams.map(t=>`<option value="${t.id}" ${a?.team_id===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div><button type="button" class="awards-manual" data-award-manual="${key}">+ Nhập thủ công</button></div><div class="awards-selected-summary" data-award-summary="${key}" ${a?.team_id?'':'hidden'}><div><strong data-award-summary-team="${key}">${esc(a?.team_name||'')}</strong><p data-award-summary-players="${key}">${esc((a?.player_names||'').split('\n').filter(Boolean).join(' · '))}</p></div><button type="button" data-award-edit="${key}">Chỉnh sửa</button></div><div class="awards-edit-fields" data-award-fields="${key}" ${manual?'':'hidden'}><label>Tên đội / Cặp<input data-award-team="${key}" value="${esc(a?.team_name||'')}" placeholder="Tên hiển thị"></label><label>Tên VĐV<textarea data-award-players="${key}" rows="3" placeholder="Mỗi VĐV một dòng">${esc(a?.player_names||'')}</textarea></label></div>${a?`<button class="awards-delete" data-award-delete="${key}">Xóa kết quả</button>`:''}`:`<div class="awards-view-team">${a?.team_name?esc(a.team_name):'Chưa có kết quả'}</div>${a?.player_names?`<p class="awards-view-players">${esc(a.player_names)}</p>`:''}`}</article>`;
  };
- area.innerHTML=`<section class="awards-editor"><div class="page-kicker">THE PANTRY · HONORS</div><div class="match-page-title"><div><h1>🏆 Vinh danh</h1><p>Chọn từ danh sách thi đấu hoặc nhập tên hiển thị thủ công.</p></div></div><div class="awards-editor-grid">${positions.filter(([p])=>p<3).map(([p,s])=>card(p,s)).join('')}</div><div class="awards-third-heading"><h2>🥉 Hạng Ba</h2>${isAdmin?`<label><input type="checkbox" id="tiedThird" ${tied?'checked':''}> Đồng hạng Ba</label>`:tied?'<span>Đồng hạng Ba</span>':''}</div><div class="awards-editor-grid awards-third-grid ${tied?'awards-third-tied':''}">${positions.filter(([p])=>p===3).map(([p,s])=>card(p,s)).join('')}</div>${isAdmin?'<div class="awards-save-bar"><button id="saveAwards">Lưu vinh danh</button><span id="awardsMessage" role="status"></span></div>':''}</section>`;
+ area.innerHTML=(podium.length?awardShowcase(podium):'')+`<section class="awards-editor"><div class="page-kicker">THE PANTRY · HONORS</div><div class="match-page-title"><div><h1>🏆 Vinh danh</h1><p>${podium.length?'Thứ hạng tự lấy từ Knockout. Có thể lưu tên hiển thị cho đội ở đúng vị trí.':'Chọn từ danh sách thi đấu hoặc nhập tên hiển thị thủ công.'}</p></div></div><div class="awards-editor-grid">${positions.filter(([p])=>p<3).map(([p,s])=>card(p,s)).join('')}</div><div class="awards-third-heading"><h2>🥉 Hạng Ba</h2>${isAdmin?`<label><input type="checkbox" id="tiedThird" ${tied?'checked':''}> Đồng hạng Ba</label>`:tied?'<span>Đồng hạng Ba</span>':''}</div><div class="awards-editor-grid awards-third-grid ${tied?'awards-third-tied':''}">${positions.filter(([p])=>p===3).map(([p,s])=>card(p,s)).join('')}</div>${isAdmin?'<div class="awards-save-bar"><button id="saveAwards">Lưu vinh danh</button><span id="awardsMessage" role="status"></span></div>':''}</section>`;
+ area.querySelector('[data-export-awards]')?.addEventListener('click',()=>downloadAwardsPoster({title:currentTournament.name,event:activeEvent.name,awards:podium}));
  if(!isAdmin)return;
  const message=area.querySelector('#awardsMessage');
  const syncCard=card=>{
