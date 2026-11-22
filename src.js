@@ -1358,13 +1358,31 @@ async function renderMatches(tid){const db=competitionClient(supabase,activeEven
       button.onclick=async()=>{
         if(!confirm('RESET TRẬN '+match.match_code+'?\\n\\nXóa toàn bộ điểm thử, hủy LIVE, giải phóng sân và đưa trận về CHƯA BẮT ĐẦU. Không thể hoàn tác. Chỉ thực hiện nếu trận chưa có kết quả thật.'))return;
         button.disabled=true;button.textContent='Đang reset…';
-        const {error}=await supabase.rpc('pantry_reset_live_match',{p_event:activeEvent.id,p_match:match.id});
+        const {error}=await supabase.rpc('pantry_reset_live_match',{p_event:db.event.id,p_match:match.id}).setHeader('x-client-info',`pantry-event/${db.event.id}`);
         if(error){alert('Không thể reset: '+error.message);button.disabled=false;button.textContent='↺ Hủy LIVE / Reset trận';return}
         if(epoch===renderEpoch)await renderMatches(tid);
       };
     });
   }
   startLive(`admin:matches:${tid}`,()=>renderMatches(tid));
+  if(String(profile?.role||'').toLowerCase()==='admin'&&!isBasic){
+    document.querySelectorAll('[data-save]').forEach(save=>{
+      const match=(matches||[]).find(row=>row.id===save.dataset.save);
+      if(!match||match.stage!=='group'||match.status!=='scheduled'||match.winner_id||match.completed_at)return;
+      const inputs=[document.querySelector(`[data-s1="${match.id}"]`),document.querySelector(`[data-s2="${match.id}"]`)];
+      if(inputs.some(input=>!input||input.disabled||input.dataset.original!==''))return;
+      const reset=document.createElement('button');
+      reset.type='button';reset.className='secondary';reset.textContent='Xóa tỉ số nhập dở';reset.hidden=true;
+      save.closest('.match-card')?.querySelector('.call-order')?.append(reset);
+      const sync=()=>{reset.hidden=inputs.every(input=>input.value==='');};
+      inputs.forEach(input=>input.addEventListener('input',sync));
+      reset.onclick=()=>{
+        if(save.disabled)return;
+        inputs.forEach(input=>{input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));});
+      };
+      sync();
+    });
+  }
   if(isBasic){document.querySelectorAll('[data-open-mlp]').forEach(b=>b.onclick=()=>{const m=(matches||[]).find(x=>x.id===b.dataset.openMlp);openMlpMatch(m,tm,tid)});return}
   document.querySelectorAll('[data-save]').forEach(b=>{const id=b.dataset.save,i1=document.querySelector(`[data-s1="${id}"]`),i2=document.querySelector(`[data-s2="${id}"]`);const markChanged=()=>{const dirty=i1.value!==i1.dataset.original||i2.value!==i2.dataset.original;if(dirty){b.textContent='Lưu thay đổi';b.classList.remove('saved-btn')}else if(i1.dataset.original!==''&&i2.dataset.original!==''){b.textContent='✓ Đã lưu';b.classList.add('saved-btn')}else{b.textContent='Lưu tỉ số';b.classList.remove('saved-btn')}};i1.addEventListener('input',markChanged);i2.addEventListener('input',markChanged);b.onclick=async()=>{let s1=i1.value,s2=i2.value;if(s1===''||s2==='')return alert('Nhập đủ 2 tỉ số');s1=+s1;s2=+s2;if(s1===s2)return alert('Tỉ số không được hòa');let m=(matches||[]).find(x=>x.id===id),winner=s1>s2?m.team1_id:m.team2_id;b.disabled=true;b.textContent='Đang lưu…';let {error}=await db.from('matches').update({team1_score:s1,team2_score:s2,winner_id:winner,status:'completed',completed_at:new Date().toISOString()}).eq('id',id);if(error){b.disabled=false;b.textContent='Lưu lại';return alert(error.message)}if(epoch===renderEpoch)await renderMatches(tid)}});
 }
