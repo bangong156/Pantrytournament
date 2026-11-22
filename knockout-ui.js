@@ -258,9 +258,10 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
       };
       paintPlan();controls.before(plan);
     }
-    controls.innerHTML=`<button id="koPreviewButton">⚡ TỰ VẼ NHÁNH KNOCKOUT</button><p role="alert"></p>`;
+    controls.innerHTML=`<button id="koPreviewButton">${managed?'↻ VẼ LẠI NHÁNH KNOCKOUT':'⚡ TỰ VẼ NHÁNH KNOCKOUT'}</button><p role="alert"></p>`;
     controls.querySelector('button').onclick=async()=>{
       const b=controls.querySelector('button');b.disabled=true;
+      controls.querySelector('[role=alert]').textContent='';
       try{
         // Capture before standings: any changed group inputs invalidate generation.
         const inputs=await rpc('pantry_knockout_inputs');if(!isCurrent())return;
@@ -281,7 +282,7 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
         if(incomplete.length)throw Error('Chưa xác định được suất Knockout. '+incomplete.join(' · '));
         let draws=decision?.snapshot?.draws||[],revision=decision?.revision||0;
         const preview=host.querySelector('#koPreview');
-        let redraw=controls.dataset.redraw==='true';delete controls.dataset.redraw;
+        const redraw=managed||controls.dataset.redraw==='true';delete controls.dataset.redraw;
         const shuffle=items=>{const out=[...items];for(let i=out.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[out[i],out[j]]=[out[j],out[i]]}return out};
         const paint=()=>{
           const result=qualify(standings,draws);result.snapshot.input_state=inputs;
@@ -323,6 +324,7 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
             }catch(error){preview.querySelector('#koError').textContent=error.message;generate.disabled=false}
           };
         };paint();
+        preview.scrollIntoView({block:'start'});
       }catch(error){controls.querySelector('[role=alert]').textContent=error.message}finally{b.disabled=false}
     };
   }catch(error){if(isCurrent())host.innerHTML=`<p role="alert">${esc(error.message)}</p>`}
