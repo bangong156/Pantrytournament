@@ -1,4 +1,4 @@
-import {qualify,buildBracket,knockoutStages,knockoutLabel,sourceLabel,knockoutRPC} from './knockout-engine.js';
+import {buildSeriesB,qualify,buildBracket,knockoutStages,knockoutLabel,sourceLabel,knockoutRPC} from './knockout-engine.js';
 import {competitionClient} from './event-scope.js';
 import {courtLabel} from './match-courts.js';
 import {matchStatus} from './spectator.js';
@@ -43,6 +43,12 @@ function seededPreview(groups){
 }
 
 export function publicBracket(matches,teamNames,{admin=false}={}){
+  const seriesB=matches.filter(match=>match.match_code.startsWith('B-'));
+  if(seriesB.length && seriesB.length<matches.length){
+    const seriesA=matches.filter(match=>!match.match_code.startsWith('B-'));
+    return '<h2>Seri A</h2>'+publicBracket(seriesA,teamNames,{admin})+'<h2>Seri B</h2>'+publicBracket(seriesB,teamNames,{admin});
+  }
+
   const rounds=knockoutStages.map(stage=>({stage,matches:matches.filter(m=>m.stage===stage)
     .sort((a,b)=>(a.scheduled_order??0)-(b.scheduled_order??0))})).filter(r=>r.matches.length);
   if(!rounds.length)return '';
@@ -141,6 +147,18 @@ function openKnockoutPoster(matches,teamNames,eventName,rules=[]){
  overlay.querySelector('#koPosterDownload').onclick=()=>{const a=document.createElement('a');a.href=image;a.download=filename;document.body.appendChild(a);a.click();a.remove()};
  overlay.querySelector('#koPosterShare').onclick=async()=>{try{const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('Không tạo được ảnh.');const file=new File([blob],filename,{type:'image/png'});if(!navigator.share||!navigator.canShare?.({files:[file]}))throw Error('Thiết bị không hỗ trợ chia sẻ ảnh trực tiếp. Hãy tải PNG.');await navigator.share({files:[file],title:'Nhánh Knockout'})}catch(error){if(error.name!=='AbortError')overlay.querySelector('#koPosterError').textContent=error.message}};
 }
+function posterButtons(matches, scope, label) {
+ const series = matches.some(match=>match.match_code.startsWith('B-'));
+ return (series?['A','B']:['']).map(letter=>
+  `<button type="button" data-poster-scope="${scope}" data-poster-series="${letter}" class="secondary">📷 ${label}${letter?' SERI '+letter:''}</button>`
+ ).join('');
+}
+function bindPosters(root, scope, matches, names, eventName) {
+ root.querySelectorAll(`[data-poster-scope="${scope}"]`).forEach(button=>{
+  const series=button.dataset.posterSeries;
+  button.onclick=()=>openKnockoutPoster(series?matches.filter(match=>match.match_code.startsWith('B-')===(series==='B')):matches,names,series?eventName+' · Seri '+series:eventName);
+ });
+}
 export async function renderManagedKnockout({client,event,host,standingsData,isCurrent,mountCourt,mountLive=()=>{}}){
   const db=competitionClient(client,event),rpc=(name,args)=>knockoutRPC(client,event,name,args);
   host.innerHTML='<p>Đang tải Knockout…</p>';
@@ -154,8 +172,8 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
     for(const r of [decisionResult,matchResult,teamResult])if(r.error)throw r.error;
     const decision=decisionResult.data,matches=matchResult.data||[],names=Object.fromEntries((teamResult.data||[]).map(t=>[t.id,t.name]));
     const managed=decision?.state==='generated',started=decision?.started_at||matches.some(m=>['playing','completed'].includes(m.status)||m.started_at||m.completed_at||m.team1_score!==null||m.team2_score!==null);
-    host.innerHTML=`<small>KNOCKOUT</small><h1>${esc(event.name)}</h1><div class="panel" id="koControls"></div>${matches.length?'<div class="ko-export-actions"><button id="koExportPoster" class="secondary">📷 XUẤT ẢNH NHÁNH KNOCKOUT</button></div>':''}${publicBracket(matches,names,{admin:true})}<div id="koPreview"></div>`;
-    const controls=host.querySelector('#koControls');host.querySelector('#koExportPoster')?.addEventListener('click',()=>openKnockoutPoster(matches,names,event.name));
+    host.innerHTML=`<small>KNOCKOUT</small><h1>${esc(event.name)}</h1><div class="panel" id="koControls"></div>${matches.length?`<div class="ko-export-actions">${posterButtons(matches,'saved','XUẤT ẢNH NHÁNH')}</div>`:''}${publicBracket(matches,names,{admin:true})}<div id="koPreview"></div>`;
+    const controls=host.querySelector('#koControls');bindPosters(host,'saved',matches,names,event.name);
     // Preserve existing court control; scoring is only exposed for managed doubles.
     for(const m of matches){const card=host.querySelector(`[data-knockout-match="${m.id}"]`);if(!card)continue;mountCourt(card,m,db);
       if(managed&&event.format==='doubles'&&m.team1_id&&m.team2_id){
@@ -213,7 +231,7 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
     if(planGroups.length===3)controls.insertAdjacentHTML('beforebegin',threeGroupPreview());
     if([2,5].includes(planGroups.length)){
       const {nodes,labels,rules}=seededPreview(planGroups);
-      controls.insertAdjacentHTML('beforebegin',`<details class="panel"><summary><strong>Xem trước nhánh ${planGroups.length} bảng</strong></summary>${rules.map(rule=>`<p>${esc(rule)}</p>`).join('')}${publicBracket(nodes,labels)}<button type="button" id="koExportDemo">📷 XUẤT ẢNH DEMO KÈM ĐIỀU LỆ</button></details>`);
+      controls.insertAdjacentHTML('beforebegin',`<details class="panel"><summary><strong>Xem trước nhánh ${planGroups.length} bảng${event.knockout_series?' · Seri A':''}</strong></summary>${rules.map(rule=>`<p>${esc(rule)}</p>`).join('')}${publicBracket(nodes,labels)}<button type="button" id="koExportDemo">📷 XUẤT ẢNH DEMO KÈM ĐIỀU LỆ</button></details>`);
       host.querySelector('#koExportDemo').onclick=()=>openKnockoutPoster(nodes,labels,event.name+' · DEMO',rules);
     }
     let knockoutPreplan=null;
@@ -287,7 +305,9 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
         const paint=()=>{
           const result=qualify(standings,draws);result.snapshot.input_state=inputs;
           const nodes=result.unresolved.length?[]:buildBracket(redraw&&!knockoutPreplan?{...result,qualifiers:shuffle(result.qualifiers),snapshot:{...result.snapshot,standings:shuffle(result.snapshot.standings)}}:result,knockoutPreplan);
-          preview.innerHTML=`<div class="panel"><h2>XEM TRƯỚC NHÁNH KNOCKOUT</h2><h3>${result.group_count===5?'VÀO THẲNG TỨ KẾT':`${result.qualifiers.length} ĐỘI VÀO VÒNG LOẠI`}</h3>${[['group_winner',result.group_count===5?'VÀO THẲNG TỨ KẾT':'NHẤT BẢNG'],['runner_up','NHÌ BẢNG'],['wildcard_third','VÉ VỚT HẠNG 3']].map(([type,label])=>`<h3>${label}</h3><ul>${result.qualifiers.filter(q=>q.qualification_type===type&&!result.unresolved.some(t=>t.teams.some(x=>x.team_id===q.team_id))).map(q=>`<li>${esc(q.group_name)}${q.group_position} · ${esc(q.name)}${q.group_position===3?` · ${q.point_difference>0?'+':''}${q.point_difference} / ${q.points_scored} điểm`:''}</li>`).join('')}</ul>`).join('')}${result.unresolved.map((tie,i)=>`<fieldset><legend>Đồng hạng vé vớt: chọn thứ tự bốc thăm (${tie.slots} suất)</legend><p>Hiệu số ${tie.point_difference} · Tổng điểm ${tie.points_scored}. Nhập thứ tự đầy đủ, không trùng.</p>${tie.teams.map((q,j)=>`<label>${esc(q.group_name)}3 · ${esc(q.name)}<input data-draw="${i}" data-team="${esc(q.team_id)}" type="number" min="1" max="${tie.teams.length}" placeholder="Thứ tự"></label>`).join('')}<button data-resolve="${i}">Xác nhận thứ tự bốc thăm</button></fieldset>`).join('')}${nodes.length?publicBracket(nodes,Object.fromEntries(result.qualifiers.map(q=>[q.team_id,`${q.group_name}${q.group_position} · ${q.name}`]))):''}<p role="alert" id="koError"></p>${nodes.length?`<button id="koRedraw" class="secondary">${result.group_count<=3||knockoutPreplan?'CẬP NHẬT NHÁNH TỪ BXH':'VẼ LẠI'}</button><button id="koPreviewExport" class="secondary">📷 XUẤT ẢNH NHÁNH</button><button id="koGenerate">XÁC NHẬN NHÁNH</button>`:''}</div>`;
+          if(event.knockout_series && nodes.length) nodes.push(...buildSeriesB(result,nodes.length));
+          const previewNames={...names,...Object.fromEntries(result.qualifiers.map(q=>[q.team_id,`${q.group_name}${q.group_position} · ${q.name}`]))};
+          preview.innerHTML=`<div class="panel"><h2>XEM TRƯỚC NHÁNH KNOCKOUT</h2><h3>${result.group_count===5?'VÀO THẲNG TỨ KẾT':`${result.qualifiers.length} ĐỘI VÀO VÒNG LOẠI`}</h3>${[['group_winner',result.group_count===5?'VÀO THẲNG TỨ KẾT':'NHẤT BẢNG'],['runner_up','NHÌ BẢNG'],['wildcard_third','VÉ VỚT HẠNG 3']].map(([type,label])=>`<h3>${label}</h3><ul>${result.qualifiers.filter(q=>q.qualification_type===type&&!result.unresolved.some(t=>t.teams.some(x=>x.team_id===q.team_id))).map(q=>`<li>${esc(q.group_name)}${q.group_position} · ${esc(q.name)}${q.group_position===3?` · ${q.point_difference>0?'+':''}${q.point_difference} / ${q.points_scored} điểm`:''}</li>`).join('')}</ul>`).join('')}${result.unresolved.map((tie,i)=>`<fieldset><legend>Đồng hạng vé vớt: chọn thứ tự bốc thăm (${tie.slots} suất)</legend><p>Hiệu số ${tie.point_difference} · Tổng điểm ${tie.points_scored}. Nhập thứ tự đầy đủ, không trùng.</p>${tie.teams.map((q,j)=>`<label>${esc(q.group_name)}3 · ${esc(q.name)}<input data-draw="${i}" data-team="${esc(q.team_id)}" type="number" min="1" max="${tie.teams.length}" placeholder="Thứ tự"></label>`).join('')}<button data-resolve="${i}">Xác nhận thứ tự bốc thăm</button></fieldset>`).join('')}${nodes.length?publicBracket(nodes,previewNames):''}<p role="alert" id="koError"></p>${nodes.length?`<button id="koRedraw" class="secondary">${result.group_count<=3||knockoutPreplan?'CẬP NHẬT NHÁNH TỪ BXH':'VẼ LẠI'}</button>${posterButtons(nodes,'preview','XUẤT ẢNH NHÁNH')}<button id="koGenerate">XÁC NHẬN NHÁNH</button>`:''}</div>`;
           preview.querySelectorAll('[data-resolve]').forEach(button=>button.onclick=async()=>{
             const i=Number(button.dataset.resolve),tie=result.unresolved[i],items=[...preview.querySelectorAll(`[data-draw="${i}"]`)].map(input=>({id:input.dataset.team,rank:Number(input.value)}));
             if(items.some(x=>!Number.isInteger(x.rank)||x.rank<1||x.rank>items.length)||new Set(items.map(x=>x.rank)).size!==items.length){preview.querySelector('#koError').textContent='Cần nhập đầy đủ thứ tự 1 đến '+items.length;return}
@@ -298,7 +318,7 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
               draws=nextDraws;if(isCurrent())paint();
             }catch(error){preview.querySelector('#koError').textContent=error.message;button.disabled=false}
           });
-          const exportButton=preview.querySelector('#koPreviewExport');if(exportButton)exportButton.onclick=()=>openKnockoutPoster(nodes,Object.fromEntries(result.qualifiers.map(q=>[q.team_id,q.name])),event.name);
+          bindPosters(preview,'preview',nodes,names,event.name);
           const redrawButton=preview.querySelector('#koRedraw');if(redrawButton)redrawButton.onclick=async()=>{
             if(!isCurrent())return;
             redrawButton.disabled=true;redrawButton.textContent='Đang cập nhật BXH…';

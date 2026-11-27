@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile,readdir} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {PGlite} from '@electric-sql/pglite';
-import {qualify,buildBracket} from '../knockout-engine.js';
+import {qualify,buildBracket,buildSeriesB} from '../knockout-engine.js';
 let db;
 const actor=randomUUID(),tournament=randomUUID();
 const sql=(s,args=[])=>db.query(s,args);
@@ -17,6 +17,7 @@ before(async()=>{
  await db.exec(await readFile(new URL('../supabase/migrations/20261113042715_three_group_knockout.sql',import.meta.url),'utf8'));
  await db.exec(await readFile(new URL('../supabase/migrations/20261113081416_two_team_head_to_head.sql',import.meta.url),'utf8'));
  await db.exec(await readFile(new URL('../supabase/migrations/20261121164654_two_group_knockout.sql',import.meta.url),'utf8'));
+ await db.exec(await readFile(new URL('../supabase/migrations/20261128000100_knockout_series.sql',import.meta.url),'utf8'));
 });
 after(async()=>{await db?.close()});
 async function scope(event){await sql("select set_config('test.event',$1,false)",[event])}
@@ -68,4 +69,16 @@ test('SQL validates the two-group direct semifinal qualifiers',async()=>{
  const f=await fixture(2),q=qualify(f.standings);
  q.snapshot.input_state=(await one('select pantry_knockout.inputs($1) inputs',[f.event])).inputs;
  assert.equal((await one('select pantry_knockout.validate_snapshot($1,$2) n',[f.event,JSON.stringify(q.snapshot)])).n,2);
+});
+
+test('SQL and preview agree on Seri B entrants across all formats',async()=>{
+ for(const n of [4,5,6,7,8]){
+  const f=await fixture(n);
+  f.standings.forEach(({rows})=>rows.push({id:randomUUID(),w:0,diff:-100,pf:1},{id:randomUUID(),w:0,diff:-200,pf:0}));
+  if(n===6)f.standings[0].rows.splice(3);
+  const q=qualify(f.standings);
+  const b=buildSeriesB(q,0).slice(0,4).flatMap(m=>[m.team1_id,m.team2_id]).sort();
+  const {ids}=await one('select pantry_knockout.series_b_ids($1,$2) as ids',[JSON.stringify(q.snapshot),n]);
+  assert.deepEqual(ids,b);
+ }
 });

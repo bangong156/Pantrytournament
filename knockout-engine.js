@@ -113,3 +113,32 @@ export async function knockoutRPC(client,event,name,args={}){
   if(error&&name==='pantry_knockout_score')throw error;
   if(error){const e=new Error(['PT409','40001'].includes(error.code)?`Xung đột Admin: ${error.message}. Tải lại để kiểm tra trước khi thử lại.`:error.code==='PGRST202'?'Chưa cài RPC Knockout. Cần áp dụng migration engine.':error.message);e.code=error.code;throw e}return data;
 }
+
+export function buildSeriesB(result, offset) {
+  const count = result.group_count;
+  if (count < 4 || count > 8) throw new Error('Seri A/B hỗ trợ từ 4 đến 8 bảng.');
+  const qualified = new Set(result.qualifiers.map(team => team.team_id));
+  const candidates = result.snapshot.standings.flatMap(group => group.rows.map((row, i) => ({
+    ...row, group_position:i+1
+  }))).filter(row => !qualified.has(row.team_id));
+  const ranked = position => candidates.filter(row => row.group_position === position)
+    .sort((a,b) => b.point_difference-a.point_difference || b.points_scored-a.points_scored || (a.team_id < b.team_id ? -1 : 1));
+  const thirds = ranked(3).slice(0,4);
+  const fourths = ranked(4).slice(0,count === 6 ? 6 : 4);
+  const teams = [...thirds,...fourths];
+  if (count === 6) teams.push(...ranked(5).slice(0,8-teams.length));
+  if (teams.length !== 8) throw new Error('Seri B cần đủ 8 đội theo điều lệ. Hiện có '+teams.length+' đội đủ điều kiện.');
+  const nodes = [];
+  const add = (stage, code, slots) => {
+    for(let i=0;i<slots.length;i+=2) {
+      const [left,right] = slots.slice(i,i+2);
+      nodes.push({stage,match_code:'B-'+code+'-'+(i/2+1),scheduled_order:offset+nodes.length+1,
+        team1_id:left.team_id??null,team2_id:right.team_id??null,
+        team1_source_code:left.source??null,team2_source_code:right.source??null});
+    }
+  };
+  add('quarterfinal','QF',teams.slice(0,4).flatMap((team,i)=>[team,teams[7-i]]));
+  add('semifinal','SF',nodes.map(node=>({source:node.match_code})));
+  add('final','F',nodes.slice(4).map(node=>({source:node.match_code})));
+  return nodes;
+}

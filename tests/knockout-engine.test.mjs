@@ -111,3 +111,23 @@ test('two groups cross-seed four teams directly into semifinals',()=>{
  assert.deepEqual([bracket[2].team1_source_code,bracket[2].team2_source_code],['SF-1','SF-2']);
  assert.ok(result.qualifiers.every(team=>team.entry_stage==='semifinal'));
 });
+
+test('Seri B qualifies eight distinct teams in every supported format',async()=>{
+ const {buildSeriesB}=await import('../knockout-engine.js');
+ for(const n of [4,5,6,7,8]){
+  const groups=standings(n);
+  for(const {group,rows} of groups){
+   rows.push({id:group.name+'4',name:group.name+'4',w:0,diff:-15,pf:5});
+   rows.push({id:group.name+'5',name:group.name+'5',w:0,diff:-20,pf:3});
+  }
+  if(n===6)groups[0].rows.splice(3);
+  const result=qualify(groups),a=buildBracket(result),b=buildSeriesB(result,a.length);
+  const ids=b.slice(0,4).flatMap(match=>[match.team1_id,match.team2_id]);
+  assert.equal(new Set(ids).size,8);
+  assert.ok(ids.every(id=>!result.qualifiers.some(q=>q.team_id===id)));
+  assert.equal(ids.filter(id=>id.endsWith('3')).length,n===6?2:4);
+  assert.equal(ids.filter(id=>id.endsWith('5')).length,n===6?1:0);
+  assert.equal(b.length,7);
+  assert.deepEqual([b[6].team1_source_code,b[6].team2_source_code],['B-SF-1','B-SF-2']);
+ }
+});
