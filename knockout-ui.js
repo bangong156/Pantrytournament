@@ -167,7 +167,7 @@ function bindPosters(root, scope, matches, names, eventName) {
   button.onclick=()=>openKnockoutPoster(series?matches.filter(match=>match.match_code.startsWith('B-')===(series==='B')):matches,names,series?eventName+' · Seri '+series:eventName);
  });
 }
-export async function renderManagedKnockout({client,event,host,standingsData,isCurrent,mountCourt,mountLive=()=>{}}){
+export async function renderManagedKnockout({client,event,host,standingsData,isCurrent,mountCourt,mountLive=()=>{},canReplaceTeam=false}){
   const db=competitionClient(client,event),rpc=(name,args)=>knockoutRPC(client,event,name,args);
   host.innerHTML='<p>Đang tải Knockout…</p>';
   try{
@@ -184,6 +184,42 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
     const controls=host.querySelector('#koControls');bindPosters(host,'saved',matches,names,event.name);
     // Preserve existing court control; scoring is only exposed for managed doubles.
     for(const m of matches){const card=host.querySelector(`[data-knockout-match="${m.id}"]`);if(!card)continue;mountCourt(card,m,db);
+      if(canReplaceTeam&&managed&&m.status==='scheduled'&&!m.started_at&&!m.completed_at&&m.team1_score==null&&m.team2_score==null){
+        card.querySelectorAll('.knockout-team > span').forEach((label,i)=>{
+          const side=i+1,previous=m[`team${side}_id`];
+          if(!previous)return;
+          const button=document.createElement('button');
+          button.type='button';button.className='ghost';button.textContent=label.textContent+' ✎';
+          button.style.cssText='text-align:left;padding:3px 0;min-height:0;width:auto';
+          button.title='Thay cặp '+names[previous];label.replaceWith(button);
+          button.onclick=async()=>{
+            const overlay=document.createElement('div');overlay.className='overlay';
+            overlay.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-label="Thay cặp Knockout"><div class="modalhead"><h2>Thay cặp · ${esc(m.match_code)}</h2><button type="button" class="x" aria-label="Đóng">×</button></div><p>Đang thay <strong>${esc(names[previous])}</strong></p><label>Cặp dự bị<select disabled></select></label><button type="button" class="wide" disabled>Xác nhận thay cặp</button><p role="alert">Đang tải danh sách…</p></section>`;
+            document.body.append(overlay);
+            const close=overlay.querySelector('.x'), save=overlay.querySelector('.wide');
+            const select=overlay.querySelector('select'), feedback=overlay.querySelector('[role=alert]');
+            close.onclick=()=>overlay.remove();
+            try{
+              const available=await rpc('pantry_knockout_replacement_candidates',{});
+              if(!overlay.isConnected)return;
+              select.replaceChildren(new Option('Chọn cặp dự bị',''),...available.map(team=>new Option(team.name,team.id)));
+              feedback.textContent=available.length?'':'Không còn cặp dự bị trong nội dung này.';
+              select.disabled=!available.length;
+              select.onchange=()=>{save.disabled=!select.value;};
+            }catch(error){feedback.textContent=error.message;}
+            save.onclick=async()=>{
+              if(!isCurrent()||!select.value)return;
+              save.disabled=close.disabled=select.disabled=true;
+              try{
+                await rpc('pantry_knockout_replace_team',{p_match:m.id,p_side:side,p_previous:previous,p_replacement:select.value});
+                overlay.remove();
+                if(isCurrent())await renderManagedKnockout({client,event,host,standingsData,isCurrent,mountCourt,mountLive,canReplaceTeam});
+              }catch(error){feedback.textContent=error.message;save.disabled=close.disabled=select.disabled=false;}
+            };
+          };
+        });
+      }
+
       if(managed&&event.format==='doubles'&&m.team1_id&&m.team2_id){
         const form=document.createElement('form');form.className='knockout-score';form.noValidate=true;
         form.innerHTML=`<label>Điểm đội 1<input name="s1" type="number" min="0" step="1" required value="${m.team1_score??''}"></label><span class="knockout-score-separator" aria-hidden="true">:</span><label>Điểm đội 2<input name="s2" type="number" min="0" step="1" required value="${m.team2_score??''}"></label><button>LƯU TỈ SỐ</button><p role="alert"></p>`;
@@ -209,7 +245,7 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
             try{
               await rpc('pantry_knockout_score',{p_match:m.id,p_expected_revision:decision.revision,p_expected_score_version:m.score_version,p_score1:scores[0],p_score2:scores[1]});
               overlay.remove();
-              if(isCurrent())await renderManagedKnockout({client,event,host,standingsData,isCurrent,mountCourt,mountLive});
+              if(isCurrent())await renderManagedKnockout({client,event,host,standingsData,isCurrent,mountCourt,mountLive,canReplaceTeam});
             }catch(error){errorBox.textContent=error.message;buttons.forEach(button=>button.disabled=false)}
           };
         };
@@ -354,7 +390,7 @@ export async function renderManagedKnockout({client,event,host,standingsData,isC
             try{
               // Regeneration persists changed draws with the new graph atomically.
               await rpc('pantry_knockout_generate',{p_expected_revision:revision,p_confirm_regeneration:managed,p_snapshot:result.snapshot,p_nodes:nodes});
-              if(isCurrent())await renderManagedKnockout({client,event,host,standingsData,isCurrent,mountCourt,mountLive});
+              if(isCurrent())await renderManagedKnockout({client,event,host,standingsData,isCurrent,mountCourt,mountLive,canReplaceTeam});
             }catch(error){preview.querySelector('#koError').textContent=error.message;generate.disabled=false}
           };
         };paint();
